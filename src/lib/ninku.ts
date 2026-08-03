@@ -1,8 +1,8 @@
 import { fromJstParts, toJstParts } from "./jst-date";
 
 export const STANDARD_WORK_HOURS = 8;
-export const TIME_STEP_MINUTES = 10;
-export const TIME_STEP_HOURS = TIME_STEP_MINUTES / 60; // 1/6
+export const TIME_STEP_MINUTES = 5;
+export const TIME_STEP_HOURS = TIME_STEP_MINUTES / 60; // 1/12
 export const NINKU_PER_HOUR = 1 / 8; // 0.125
 export const OVERTIME_MULTIPLIER = 1.25;
 
@@ -93,7 +93,7 @@ export interface NinkuResult {
 }
 
 // 人工は1.25倍の残業係数がかかるため、桁の細かい値になりやすい（例: 3.828125）。
-// また稼働時間も10分刻み(1/6時間)で計算するため、丸めないと6.6666666666667hのような
+// また稼働時間も5分刻み(1/12時間)で計算するため、丸めないと6.6666666666667hのような
 // 割り切れない小数になってしまう。実務上意味のある桁数ではないため、表示・集計・CSV・
 // BigQuery連携も含めてこの計算結果を使うすべての箇所で読みやすい小数第2位に丸めておく。
 function round2(value: number): number {
@@ -109,10 +109,10 @@ export function calculateNinkuFromHours(workedHours: number): NinkuResult {
   }
 
   const stepUnits = Math.round(workedHours / TIME_STEP_HOURS);
-  const standardUnits = Math.round(STANDARD_WORK_HOURS / TIME_STEP_HOURS); // 48
+  const standardUnits = Math.round(STANDARD_WORK_HOURS / TIME_STEP_HOURS); // 96
   const regularUnits = Math.min(stepUnits, standardUnits);
   const overtimeUnits = Math.max(0, stepUnits - standardUnits);
-  const ninkuPerStep = NINKU_PER_HOUR * TIME_STEP_HOURS; // 1/48
+  const ninkuPerStep = NINKU_PER_HOUR * TIME_STEP_HOURS; // 1/96
 
   const regularNinku = roundNinku(regularUnits * ninkuPerStep);
   const overtimeNinku = roundNinku(overtimeUnits * ninkuPerStep * OVERTIME_MULTIPLIER);

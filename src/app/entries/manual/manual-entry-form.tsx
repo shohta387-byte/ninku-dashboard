@@ -10,7 +10,7 @@ type Site = { id: string; name: string };
 function generateTimeOptions(): string[] {
   const options: string[] = [];
   for (let h = 0; h < 24; h++) {
-    for (const m of [0, 10, 20, 30, 40, 50]) {
+    for (const m of [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]) {
       options.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
     }
   }

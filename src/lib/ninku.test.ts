@@ -32,8 +32,8 @@ describe("computeWorkedHours", () => {
     expect(computeWorkedHours(time(9, 0), time(9, 30))).toBe(0);
   });
 
-  it("07:12-17:30 -> 8.3h (07:12 rounds to 07:10, 10-minute step)", () => {
-    expect(computeWorkedHours(time(7, 12), time(17, 30))).toBeCloseTo(8 + 1 / 3, 10);
+  it("07:13-17:30 -> 8.25h (07:13 rounds to 07:15, 5-minute step)", () => {
+    expect(computeWorkedHours(time(7, 13), time(17, 30))).toBeCloseTo(8.25, 10);
   });
 
   it("throws when clockOut is not after clockIn", () => {
@@ -52,8 +52,8 @@ describe("computeWorkedHours", () => {
     expect(computeWorkedHours(time(8, 0), time(12, 0), ["break1"])).toBe(2.5);
   });
 
-  it("10:00-10:05 -> 0h (valid order, but rounds into the same 10-minute bucket)", () => {
-    expect(computeWorkedHours(time(10, 0), time(10, 5))).toBe(0);
+  it("10:00-10:02 -> 0h (valid order, but rounds into the same 5-minute bucket)", () => {
+    expect(computeWorkedHours(time(10, 0), time(10, 2))).toBe(0);
   });
 });
 
