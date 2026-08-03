@@ -536,6 +536,107 @@ export async function getTimeEntryById(entryId: string) {
   return entry;
 }
 
+// --- 管理者: 従業員の打刻を代理入力 ---
+
+export interface CreateEntryForEmployeeState {
+  status: "idle" | "success" | "error";
+  message: string;
+}
+
+// 従業員が自分で打刻できなかった場合に、管理者が代わりに出勤・退勤時刻を入力する。
+// createManualTimeEntry(従業員本人用)とほぼ同じ検証だが、任意の従業員を指定できる点と
+// 管理者権限が必要な点が異なる。
+export async function createEntryForEmployee(
+  _prevState: CreateEntryForEmployeeState,
+  formData: FormData,
+): Promise<CreateEntryForEmployeeState> {
+  const session = await requireAdminSession();
+
+  const employeeId = formData.get("employeeId");
+  const siteId = formData.get("siteId");
+  const dateStr = formData.get("date");
+  const clockInTime = formData.get("clockInTime");
+  const clockOutTime = formData.get("clockOutTime");
+  const note = formData.get("note");
+  const dailyReport = formData.get("dailyReport");
+
+  if (typeof employeeId !== "string" || employeeId === "") {
+    return { status: "error", message: "従業員を選択してください" };
+  }
+  if (typeof siteId !== "string" || siteId === "") {
+    return { status: "error", message: "現場を選択してください" };
+  }
+  if (typeof dateStr !== "string" || dateStr === "") {
+    return { status: "error", message: "日付を選択してください" };
+  }
+  if (typeof clockInTime !== "string" || typeof clockOutTime !== "string") {
+    return { status: "error", message: "時刻を選択してください" };
+  }
+
+  const workDate = startOfDateString(dateStr);
+  if (workDate.getTime() > startOfToday().getTime()) {
+    return { status: "error", message: "未来の日付は追加できません" };
+  }
+
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+  if (!employee) {
+    return { status: "error", message: "従業員が見つかりません" };
+  }
+  const site = await prisma.site.findUnique({ where: { id: siteId } });
+  if (!site) {
+    return { status: "error", message: "現場が見つかりません" };
+  }
+
+  const newClockIn = combineDateAndTime(workDate, clockInTime);
+  const newClockOut = combineDateAndTime(workDate, clockOutTime);
+  if (newClockOut <= newClockIn) {
+    return { status: "error", message: "退勤時刻は出勤時刻より後にしてください" };
+  }
+
+  const sameDayEntries = await prisma.timeEntry.findMany({ where: { employeeId, workDate } });
+  const overlapping = sameDayEntries.some((e) => {
+    if (!e.clockIn) return false;
+    const existingEnd = e.clockOut ?? new Date(8640000000000000); // 退勤していない場合は無期限とみなす
+    return rangesOverlap(newClockIn, newClockOut, e.clockIn, existingEnd);
+  });
+  if (overlapping) {
+    return { status: "error", message: "同じ日の他の打刻と時間帯が重なっています" };
+  }
+
+  const validKeys = new Set(
+    getBreakWindowsWithinSpan(workDate, newClockIn, newClockOut).map((w) => w.key),
+  );
+  const checked = checkedBreakKeysFromFormData(formData);
+  const effectiveChecked = new Set([...checked].filter((k) => validKeys.has(k)));
+
+  await prisma.timeEntry.create({
+    data: {
+      employeeId,
+      siteId,
+      workDate,
+      clockIn: newClockIn,
+      clockOut: newClockOut,
+      originalClockIn: newClockIn,
+      originalClockOut: newClockOut,
+      isManuallyAdjusted: true,
+      adjustedAt: new Date(),
+      adjustmentNote: typeof note === "string" && note.trim() !== "" ? note.trim() : "管理者が代理で入力",
+      adjustedByName: session.email,
+      dailyReport: typeof dailyReport === "string" && dailyReport.trim() !== "" ? dailyReport.trim() : null,
+      ...workedBreakFields(effectiveChecked),
+    },
+  });
+
+  revalidatePath("/admin/reports");
+  revalidatePath("/admin/entries/new");
+  triggerBigQuerySyncInBackground();
+
+  return {
+    status: "success",
+    message: `${employee.name} さんの打刻（${dateStr} ${clockInTime}〜${clockOutTime}、${site.name}）を追加しました。`,
+  };
+}
+
 // --- 管理者: ホワイトリスト管理 ---
 
 export async function getAllowedEmails() {

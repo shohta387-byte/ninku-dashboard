@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { createManualTimeEntry } from "@/app/actions";
+import { useActionState, useMemo, useState } from "react";
+import { createEntryForEmployee, type CreateEntryForEmployeeState } from "@/app/actions";
 import { BREAK_WINDOWS, getBreakWindowsWithinSpan } from "@/lib/ninku";
 
+type Employee = { id: string; name: string };
 type Site = { id: string; name: string };
 
 function generateTimeOptions(): string[] {
@@ -39,13 +40,14 @@ function todayInputValue(): string {
 }
 
 const TIME_OPTIONS = generateTimeOptions();
+const initialState: CreateEntryForEmployeeState = { status: "idle", message: "" };
 
-export function ManualEntryForm({ sites }: { sites: Site[] }) {
+export function AdminEntryForm({ employees, sites }: { employees: Employee[]; sites: Site[] }) {
+  const [state, formAction, isPending] = useActionState(createEntryForEmployee, initialState);
   const [date, setDate] = useState(todayInputValue());
   const [clockInTime, setClockInTime] = useState("07:30");
   const [clockOutTime, setClockOutTime] = useState("17:30");
 
-  // 選択された日付・出退勤時刻から、実際にその時間帯に含まれる休憩枠だけを算出する。
   const eligibleKeys = useMemo(() => {
     const workDate = toLocalDate(date);
     if (!workDate) return new Set<string>();
@@ -55,8 +57,30 @@ export function ManualEntryForm({ sites }: { sites: Site[] }) {
     return new Set(getBreakWindowsWithinSpan(workDate, clockIn, clockOut).map((w) => w.key));
   }, [date, clockInTime, clockOutTime]);
 
+  if (employees.length === 0) {
+    return <p className="text-zinc-500">従業員が登録されていません。</p>;
+  }
+  if (sites.length === 0) {
+    return <p className="text-zinc-500">現場が登録されていません。</p>;
+  }
+
   return (
-    <form action={createManualTimeEntry} className="flex flex-col gap-5">
+    <form action={formAction} className="flex flex-col gap-5">
+      <label className="flex flex-col gap-1">
+        <span className="text-sm text-zinc-500">従業員</span>
+        <select
+          name="employeeId"
+          required
+          className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
+        >
+          {employees.map((employee) => (
+            <option key={employee.id} value={employee.id}>
+              {employee.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="flex flex-col gap-1">
         <span className="text-sm text-zinc-500">現場</span>
         <select
@@ -143,7 +167,7 @@ export function ManualEntryForm({ sites }: { sites: Site[] }) {
         <input
           name="note"
           type="text"
-          placeholder="打刻を忘れたため後から入力"
+          placeholder="本人が打刻できなかったため代理入力"
           className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
         />
       </label>
@@ -158,11 +182,23 @@ export function ManualEntryForm({ sites }: { sites: Site[] }) {
         />
       </label>
 
+      {state.status === "error" && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          {state.message}
+        </p>
+      )}
+      {state.status === "success" && (
+        <p className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300">
+          {state.message}
+        </p>
+      )}
+
       <button
         type="submit"
-        className="w-full rounded-lg bg-blue-600 px-5 py-4 text-lg font-bold text-white shadow-sm active:bg-blue-700"
+        disabled={isPending}
+        className="w-full rounded-lg bg-blue-600 px-5 py-4 text-lg font-bold text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
       >
-        追加する
+        {isPending ? "追加中…" : "追加する"}
       </button>
     </form>
   );

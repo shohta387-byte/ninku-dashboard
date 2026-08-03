@@ -1,19 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adjustTimeEntryForm, getTimeEntryById } from "@/app/actions";
-import { roundToNearestHalfHour } from "@/lib/ninku";
+import { roundToTimeStep } from "@/lib/ninku";
 
-function formatHalfHour(date: Date): string {
-  const rounded = roundToNearestHalfHour(date);
+function formatTimeStep(date: Date): string {
+  const rounded = roundToTimeStep(date);
   const hh = String(rounded.getHours()).padStart(2, "0");
   const mm = String(rounded.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 }
 
-function generateHalfHourOptions(): string[] {
+function generateTimeOptions(): string[] {
   const options: string[] = [];
   for (let h = 0; h < 24; h++) {
-    for (const m of [0, 30]) {
+    for (const m of [0, 10, 20, 30, 40, 50]) {
       options.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
     }
   }
@@ -31,9 +31,9 @@ export default async function EditEntryPage({
     notFound();
   }
 
-  const options = generateHalfHourOptions();
-  const defaultClockIn = entry.clockIn ? formatHalfHour(entry.clockIn) : "07:30";
-  const defaultClockOut = entry.clockOut ? formatHalfHour(entry.clockOut) : "17:30";
+  const options = generateTimeOptions();
+  const defaultClockIn = entry.clockIn ? formatTimeStep(entry.clockIn) : "07:30";
+  const defaultClockOut = entry.clockOut ? formatTimeStep(entry.clockOut) : "17:30";
   const action = adjustTimeEntryForm.bind(null, id);
 
   return (

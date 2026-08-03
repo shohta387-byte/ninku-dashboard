@@ -1,4 +1,10 @@
-import { calculateNinkuForEntry, getWorkedBreakKeysFromEntry, roundNinku, type NinkuResult } from "./ninku";
+import {
+  calculateNinkuForEntry,
+  getWorkedBreakKeysFromEntry,
+  roundHours,
+  roundNinku,
+  type NinkuResult,
+} from "./ninku";
 
 export type ReportGranularity = "day" | "week" | "month";
 
@@ -100,7 +106,7 @@ export function summarizeByPeriod(
     }
   }
   return [...map.values()]
-    .map((p) => ({ ...p, totalNinku: roundNinku(p.totalNinku) }))
+    .map((p) => ({ ...p, totalNinku: roundNinku(p.totalNinku), totalHours: roundHours(p.totalHours) }))
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
@@ -131,7 +137,7 @@ export function summarizeByEmployee(entries: ReportEntry[]): EmployeeSummary[] {
     }
   }
   return [...map.values()]
-    .map((e) => ({ ...e, totalNinku: roundNinku(e.totalNinku) }))
+    .map((e) => ({ ...e, totalNinku: roundNinku(e.totalNinku), totalHours: roundHours(e.totalHours) }))
     .sort((a, b) => b.totalNinku - a.totalNinku);
 }
 
@@ -162,7 +168,7 @@ export function summarizeBySite(entries: ReportEntry[]): SiteSummary[] {
     }
   }
   return [...map.values()]
-    .map((s) => ({ ...s, totalNinku: roundNinku(s.totalNinku) }))
+    .map((s) => ({ ...s, totalNinku: roundNinku(s.totalNinku), totalHours: roundHours(s.totalHours) }))
     .sort((a, b) => b.totalNinku - a.totalNinku);
 }
 
@@ -171,5 +177,5 @@ export function sumNinku(entries: ReportEntry[]): number {
 }
 
 export function sumHours(entries: ReportEntry[]): number {
-  return entries.reduce((sum, e) => sum + e.ninku.workedHours, 0);
+  return roundHours(entries.reduce((sum, e) => sum + e.ninku.workedHours, 0));
 }

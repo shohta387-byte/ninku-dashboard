@@ -1,5 +1,6 @@
 export const STANDARD_WORK_HOURS = 8;
-export const HALF_HOUR = 0.5;
+export const TIME_STEP_MINUTES = 10;
+export const TIME_STEP_HOURS = TIME_STEP_MINUTES / 60; // 1/6
 export const NINKU_PER_HOUR = 1 / 8; // 0.125
 export const OVERTIME_MULTIPLIER = 1.25;
 
@@ -55,9 +56,9 @@ export function getBreakWindowsWithinSpan(
   });
 }
 
-export function roundToNearestHalfHour(date: Date): Date {
-  const halfHourMs = 30 * 60 * 1000;
-  return new Date(Math.round(date.getTime() / halfHourMs) * halfHourMs);
+export function roundToTimeStep(date: Date): Date {
+  const stepMs = TIME_STEP_MINUTES * 60 * 1000;
+  return new Date(Math.round(date.getTime() / stepMs) * stepMs);
 }
 
 export function computeWorkedHours(
@@ -68,8 +69,8 @@ export function computeWorkedHours(
   if (clockOut <= clockIn) {
     throw new Error("clockOut must be after clockIn");
   }
-  const inR = roundToNearestHalfHour(clockIn);
-  const outR = roundToNearestHalfHour(clockOut);
+  const inR = roundToTimeStep(clockIn);
+  const outR = roundToTimeStep(clockOut);
   // 丸め後に同じ枠へ収まる短時間の勤務（例: 09:00-09:05）は、順序としては正当なので
   // エラーにはせず稼働時間0として扱う。
   const spanHours = Math.max(0, (outR.getTime() - inR.getTime()) / 3_600_000);
@@ -89,31 +90,35 @@ export interface NinkuResult {
   totalNinku: number;
 }
 
-// 人工は1.25倍の残業係数がかかるため、1/64人工のような桁の細かい値になりやすい
-// （例: 3.828125）。実務上意味のある桁数ではないため、表示・集計・CSV・BigQuery連携も
-// 含めてこの計算結果を使うすべての箇所で読みやすい小数第2位に丸めておく。
-export function roundNinku(value: number): number {
+// 人工は1.25倍の残業係数がかかるため、桁の細かい値になりやすい（例: 3.828125）。
+// また稼働時間も10分刻み(1/6時間)で計算するため、丸めないと6.6666666666667hのような
+// 割り切れない小数になってしまう。実務上意味のある桁数ではないため、表示・集計・CSV・
+// BigQuery連携も含めてこの計算結果を使うすべての箇所で読みやすい小数第2位に丸めておく。
+function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
+
+export const roundNinku = round2;
+export const roundHours = round2;
 
 export function calculateNinkuFromHours(workedHours: number): NinkuResult {
   if (workedHours < 0) {
     throw new Error("workedHours cannot be negative");
   }
 
-  const halfHourUnits = Math.round(workedHours / HALF_HOUR);
-  const standardUnits = STANDARD_WORK_HOURS / HALF_HOUR; // 16
-  const regularUnits = Math.min(halfHourUnits, standardUnits);
-  const overtimeUnits = Math.max(0, halfHourUnits - standardUnits);
-  const ninkuPerHalfHour = NINKU_PER_HOUR * HALF_HOUR; // 0.0625
+  const stepUnits = Math.round(workedHours / TIME_STEP_HOURS);
+  const standardUnits = Math.round(STANDARD_WORK_HOURS / TIME_STEP_HOURS); // 48
+  const regularUnits = Math.min(stepUnits, standardUnits);
+  const overtimeUnits = Math.max(0, stepUnits - standardUnits);
+  const ninkuPerStep = NINKU_PER_HOUR * TIME_STEP_HOURS; // 1/48
 
-  const regularNinku = roundNinku(regularUnits * ninkuPerHalfHour);
-  const overtimeNinku = roundNinku(overtimeUnits * ninkuPerHalfHour * OVERTIME_MULTIPLIER);
+  const regularNinku = roundNinku(regularUnits * ninkuPerStep);
+  const overtimeNinku = roundNinku(overtimeUnits * ninkuPerStep * OVERTIME_MULTIPLIER);
 
   return {
-    workedHours: halfHourUnits * HALF_HOUR,
-    regularHours: regularUnits * HALF_HOUR,
-    overtimeHours: overtimeUnits * HALF_HOUR,
+    workedHours: roundHours(stepUnits * TIME_STEP_HOURS),
+    regularHours: roundHours(regularUnits * TIME_STEP_HOURS),
+    overtimeHours: roundHours(overtimeUnits * TIME_STEP_HOURS),
     regularNinku,
     overtimeNinku,
     totalNinku: roundNinku(regularNinku + overtimeNinku),
