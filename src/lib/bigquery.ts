@@ -19,9 +19,26 @@ const SITE_TABLE_ID = "sites";
 const LOCATION = process.env.BIGQUERY_LOCATION || "asia-northeast1";
 
 function getClient(): BigQuery {
-  // GOOGLE_APPLICATION_CREDENTIALS(サービスアカウントキーのパス)が設定されていれば
-  // ライブラリが自動で読み込む。projectIdだけ明示的に指定する。
-  return new BigQuery({ projectId: requireEnv("BIGQUERY_PROJECT_ID") });
+  const projectId = requireEnv("BIGQUERY_PROJECT_ID");
+
+  // Vercelなどサーバーレス環境ではローカルに鍵ファイルを置けないため、
+  // サービスアカウントキーのJSON本文をそのまま環境変数(GOOGLE_APPLICATION_CREDENTIALS_JSON)
+  // に入れられるようにする。ローカル開発では従来通りGOOGLE_APPLICATION_CREDENTIALS(ファイルパス)
+  // をライブラリが自動で読み込む。
+  const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  if (credentialsJson) {
+    let credentials: Record<string, unknown>;
+    try {
+      credentials = JSON.parse(credentialsJson);
+    } catch {
+      throw new Error(
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON の中身がJSONとして解析できません。サービスアカウント鍵ファイルの内容をそのまま貼り付けてください。",
+      );
+    }
+    return new BigQuery({ projectId, credentials });
+  }
+
+  return new BigQuery({ projectId });
 }
 
 type BqFieldType = "STRING" | "TIMESTAMP" | "DATE" | "FLOAT" | "BOOLEAN";
