@@ -7,6 +7,7 @@ import { BREAK_WINDOWS, getBreakWindowsWithinSpan, type BreakKey } from "@/lib/n
 import { sumHours, sumNinku, toReportEntry, type ReportEntry } from "@/lib/report";
 import { geocodeAddress, type GeocodeResult } from "@/lib/geocode";
 import {
+  createSession,
   destroySession,
   getSession,
   requireAdminSession,
@@ -65,6 +66,45 @@ export async function getCurrentUserLabel(): Promise<string> {
     if (employee) return employee.name;
   }
   return session.email;
+}
+
+// 従業員に紐付いていない管理者専用アカウントが、自分自身も打刻できるようにする。
+// 新しい従業員をその場で作り、自分のホワイトリスト登録に紐付けた上で、
+// （次回ログインを待たず）今のセッションCookieも更新する。
+export async function linkSelfAsEmployee(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+  if (session.employeeId) {
+    redirect("/");
+  }
+
+  const name = formData.get("name");
+  if (typeof name !== "string" || name.trim() === "") {
+    throw new Error("名前を入力してください");
+  }
+
+  const allowed = await prisma.allowedEmail.findUnique({ where: { email: session.email } });
+  if (!allowed) {
+    redirect("/login");
+  }
+
+  const employeeId =
+    allowed.employeeId ??
+    (
+      await prisma.$transaction(async (tx) => {
+        const created = await tx.employee.create({ data: { name: name.trim() } });
+        await tx.allowedEmail.update({ where: { id: allowed.id }, data: { employeeId: created.id } });
+        return created;
+      })
+    ).id;
+
+  // employeeIdが変わったので、署名済みセッションCookieも作り直して即座に反映する。
+  await createSession({ email: session.email, employeeId, isAdmin: session.isAdmin });
+
+  revalidatePath("/admin/whitelist");
+  redirect("/");
 }
 
 // 管理者画面（ホワイトリストの従業員選択など）専用。一覧に全員の名前が出るため管理者限定にする。
