@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { createManualTimeEntry } from "@/app/actions";
+import { useActionState, useMemo, useState } from "react";
+import { createManualTimeEntry, type ManualEntryState } from "@/app/actions";
 import { BREAK_WINDOWS, getBreakWindowsWithinSpan } from "@/lib/ninku";
 import { jstDateTimeFromHHMM, jstMidnightFromInputValue, toJstInputValue, todayInJst } from "@/lib/jst-date";
 
@@ -22,8 +22,10 @@ function todayInputValue(): string {
 }
 
 const TIME_OPTIONS = generateTimeOptions();
+const initialState: ManualEntryState = { status: "idle", message: "" };
 
 export function ManualEntryForm({ sites }: { sites: Site[] }) {
+  const [state, formAction, isPending] = useActionState(createManualTimeEntry, initialState);
   const [date, setDate] = useState(todayInputValue());
   const [clockInTime, setClockInTime] = useState("07:30");
   const [clockOutTime, setClockOutTime] = useState("17:30");
@@ -42,7 +44,7 @@ export function ManualEntryForm({ sites }: { sites: Site[] }) {
   }, [date, clockInTime, clockOutTime]);
 
   return (
-    <form action={createManualTimeEntry} className="flex flex-col gap-5">
+    <form action={formAction} className="flex flex-col gap-5">
       <label className="flex flex-col gap-1">
         <span className="text-sm text-zinc-500">現場</span>
         <select
@@ -144,11 +146,18 @@ export function ManualEntryForm({ sites }: { sites: Site[] }) {
         />
       </label>
 
+      {state.status === "error" && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          {state.message}
+        </p>
+      )}
+
       <button
         type="submit"
-        className="w-full rounded-lg bg-blue-600 px-5 py-4 text-lg font-bold text-white shadow-sm active:bg-blue-700"
+        disabled={isPending}
+        className="w-full rounded-lg bg-blue-600 px-5 py-4 text-lg font-bold text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
       >
-        追加する
+        {isPending ? "追加中…" : "追加する"}
       </button>
     </form>
   );

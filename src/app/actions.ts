@@ -290,10 +290,18 @@ export async function getTodayEntriesForSelf() {
   });
 }
 
-// フォームのaction属性に直接bindして渡すため、戻り値はvoidにする。
+export interface ClockInState {
+  status: "idle" | "error";
+  message: string;
+}
+
 // employeeIdはクライアントから受け取らず、必ずセッションから解決する
 // （他人になりすまして打刻できないようにするため）。
-export async function clockIn(siteId: string): Promise<void> {
+export async function clockIn(
+  siteId: string,
+  _prevState: ClockInState,
+  _formData: FormData,
+): Promise<ClockInState> {
   const { employeeId } = await requireEmployeeSession();
 
   // 同時に2現場で稼働することはできないため、退勤していない打刻が残っていないか確認する。
@@ -301,7 +309,7 @@ export async function clockIn(siteId: string): Promise<void> {
     where: { employeeId, workDate: startOfToday(), clockOut: null },
   });
   if (openEntry) {
-    throw new Error("すでに退勤していない打刻があります。先に退勤してください");
+    return { status: "error", message: "すでに退勤していない打刻があります。先に退勤してください" };
   }
 
   const now = new Date();
@@ -315,6 +323,7 @@ export async function clockIn(siteId: string): Promise<void> {
     },
   });
   revalidatePath("/clock");
+  return { status: "idle", message: "" };
 }
 
 // フォームのチェックボックスは休憩枠ごとに name="break1" 等で送られてくる（チェック時のみ値が付く）。
@@ -332,14 +341,23 @@ function workedBreakFields(checked: Set<BreakKey>) {
   };
 }
 
-export async function clockOut(entryId: string, formData: FormData): Promise<void> {
+export interface ClockOutState {
+  status: "idle" | "error";
+  message: string;
+}
+
+export async function clockOut(
+  entryId: string,
+  _prevState: ClockOutState,
+  formData: FormData,
+): Promise<ClockOutState> {
   const { employeeId } = await requireEmployeeSession();
   const existing = await prisma.timeEntry.findUniqueOrThrow({ where: { id: entryId } });
   if (existing.employeeId !== employeeId) {
-    throw new Error("この打刻を操作する権限がありません");
+    return { status: "error", message: "この打刻を操作する権限がありません" };
   }
   if (!existing.clockIn) {
-    throw new Error("出勤していません");
+    return { status: "error", message: "出勤していません" };
   }
 
   const now = new Date();
@@ -361,6 +379,7 @@ export async function clockOut(entryId: string, formData: FormData): Promise<voi
   });
   revalidatePath("/clock");
   triggerBigQuerySyncInBackground();
+  return { status: "idle", message: "" };
 }
 
 function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
@@ -368,7 +387,15 @@ function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): bool
 }
 
 // リアルタイムで打刻できなかった分を後から手動で追加する。
-export async function createManualTimeEntry(formData: FormData) {
+export interface ManualEntryState {
+  status: "idle" | "error";
+  message: string;
+}
+
+export async function createManualTimeEntry(
+  _prevState: ManualEntryState,
+  formData: FormData,
+): Promise<ManualEntryState> {
   const { employeeId } = await requireEmployeeSession();
 
   const siteId = formData.get("siteId");
@@ -378,30 +405,30 @@ export async function createManualTimeEntry(formData: FormData) {
   const note = formData.get("note");
 
   if (typeof siteId !== "string" || siteId === "") {
-    throw new Error("現場を選択してください");
+    return { status: "error", message: "現場を選択してください" };
   }
   if (typeof dateStr !== "string" || dateStr === "") {
-    throw new Error("日付を選択してください");
+    return { status: "error", message: "日付を選択してください" };
   }
   if (typeof clockInTime !== "string" || typeof clockOutTime !== "string") {
-    throw new Error("時刻を選択してください");
+    return { status: "error", message: "時刻を選択してください" };
   }
 
   const workDate = startOfDateString(dateStr);
   if (workDate.getTime() > startOfToday().getTime()) {
-    throw new Error("未来の日付は追加できません");
+    return { status: "error", message: "未来の日付は追加できません" };
   }
 
   const newClockIn = combineDateAndTime(workDate, clockInTime);
   const newClockOut = combineDateAndTime(workDate, clockOutTime);
 
   if (newClockOut <= newClockIn) {
-    throw new Error("退勤時刻は出勤時刻より後にしてください");
+    return { status: "error", message: "退勤時刻は出勤時刻より後にしてください" };
   }
 
   const site = await prisma.site.findUnique({ where: { id: siteId } });
   if (!site) {
-    throw new Error("現場が見つかりません");
+    return { status: "error", message: "現場が見つかりません" };
   }
 
   // 同じ日の既存の打刻と時間帯が重なっていないか確認する（同時に2現場では働けないため）。
@@ -414,7 +441,7 @@ export async function createManualTimeEntry(formData: FormData) {
     return rangesOverlap(newClockIn, newClockOut, e.clockIn, existingEnd);
   });
   if (overlapping) {
-    throw new Error("同じ日の他の打刻と時間帯が重なっています");
+    return { status: "error", message: "同じ日の他の打刻と時間帯が重なっています" };
   }
 
   const validKeys = new Set(
@@ -447,26 +474,30 @@ export async function createManualTimeEntry(formData: FormData) {
   redirect(`/clock?siteId=${siteId}`);
 }
 
+type AdjustTimeEntryResult =
+  | { ok: true; entry: Awaited<ReturnType<typeof prisma.timeEntry.update>> }
+  | { ok: false; message: string };
+
 export async function adjustTimeEntry(
   entryId: string,
   newClockIn: Date,
   newClockOut: Date,
   note?: string,
   dailyReport?: string,
-) {
+): Promise<AdjustTimeEntryResult> {
   const session = await getSession();
   if (!session) {
     redirect("/login");
   }
 
   if (newClockOut <= newClockIn) {
-    throw new Error("退勤時刻は出勤時刻より後にしてください");
+    return { ok: false, message: "退勤時刻は出勤時刻より後にしてください" };
   }
 
   const existing = await prisma.timeEntry.findUniqueOrThrow({ where: { id: entryId } });
   // 本人の打刻、または管理者のみ補正できる。
   if (existing.employeeId !== session.employeeId && !session.isAdmin) {
-    throw new Error("この打刻を修正する権限がありません");
+    return { ok: false, message: "この打刻を修正する権限がありません" };
   }
 
   const entry = await prisma.timeEntry.update({
@@ -489,7 +520,7 @@ export async function adjustTimeEntry(
   revalidatePath("/clock");
   revalidatePath(`/entries/${entryId}/edit`);
   triggerBigQuerySyncInBackground();
-  return entry;
+  return { ok: true, entry };
 }
 
 // "HH:MM" 形式の文字列を、baseDateと同じ日本時間の日付・指定時刻を持つ絶対時刻に変換する
@@ -498,29 +529,42 @@ function combineDateAndTime(baseDate: Date, hhmm: string): Date {
   return jstDateTimeFromHHMM({ year, month, day }, hhmm);
 }
 
-// /entries/[id]/edit のフォーム(action属性)から直接呼び出すためのラッパー。
+export interface AdjustEntryState {
+  status: "idle" | "error";
+  message: string;
+}
+
+// /entries/[id]/edit のフォーム(useActionState)から呼び出すためのラッパー。
 // フォームは時刻文字列(HH:MM)しか渡せないため、ここでDateに組み立ててadjustTimeEntryに委譲する。
-export async function adjustTimeEntryForm(entryId: string, formData: FormData) {
+export async function adjustTimeEntryForm(
+  entryId: string,
+  _prevState: AdjustEntryState,
+  formData: FormData,
+): Promise<AdjustEntryState> {
   const clockInTime = formData.get("clockInTime");
   const clockOutTime = formData.get("clockOutTime");
   const note = formData.get("note");
   const dailyReport = formData.get("dailyReport");
 
   if (typeof clockInTime !== "string" || typeof clockOutTime !== "string") {
-    throw new Error("時刻を選択してください");
+    return { status: "error", message: "時刻を選択してください" };
   }
 
   const existing = await prisma.timeEntry.findUniqueOrThrow({ where: { id: entryId } });
   const newClockIn = combineDateAndTime(existing.workDate, clockInTime);
   const newClockOut = combineDateAndTime(existing.workDate, clockOutTime);
 
-  await adjustTimeEntry(
+  const result = await adjustTimeEntry(
     entryId,
     newClockIn,
     newClockOut,
     typeof note === "string" && note.length > 0 ? note : undefined,
     typeof dailyReport === "string" && dailyReport.trim() !== "" ? dailyReport.trim() : undefined,
   );
+
+  if (!result.ok) {
+    return { status: "error", message: result.message };
+  }
 
   redirect(`/clock?siteId=${existing.siteId}`);
 }
@@ -679,7 +723,19 @@ export async function getAllowedEmails() {
   });
 }
 
-export async function addAllowedEmail(formData: FormData) {
+export interface AllowedEmailState {
+  status: "idle" | "error" | "success";
+  message: string;
+}
+
+function isDuplicateEmailError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+}
+
+export async function addAllowedEmail(
+  _prevState: AllowedEmailState,
+  formData: FormData,
+): Promise<AllowedEmailState> {
   await requireAdminSession();
 
   const email = formData.get("email");
@@ -688,40 +744,55 @@ export async function addAllowedEmail(formData: FormData) {
   const isAdmin = formData.get("isAdmin") != null;
 
   if (typeof email !== "string" || email.trim() === "") {
-    throw new Error("メールアドレスを入力してください");
+    return { status: "error", message: "メールアドレスを入力してください" };
   }
 
   const hasExistingSelection = typeof employeeId === "string" && employeeId !== "";
   const hasNewName = typeof newEmployeeName === "string" && newEmployeeName.trim() !== "";
   if (hasExistingSelection && hasNewName) {
-    throw new Error("既存の従業員を選ぶか、新しい従業員名を入力するか、どちらか一方にしてください");
+    return {
+      status: "error",
+      message: "既存の従業員を選ぶか、新しい従業員名を入力するか、どちらか一方にしてください",
+    };
   }
 
-  await prisma.$transaction(async (tx) => {
-    let resolvedEmployeeId: string | null = hasExistingSelection ? (employeeId as string) : null;
+  try {
+    await prisma.$transaction(async (tx) => {
+      let resolvedEmployeeId: string | null = hasExistingSelection ? (employeeId as string) : null;
 
-    if (hasNewName) {
-      const created = await tx.employee.create({
-        data: { name: (newEmployeeName as string).trim() },
+      if (hasNewName) {
+        const created = await tx.employee.create({
+          data: { name: (newEmployeeName as string).trim() },
+        });
+        resolvedEmployeeId = created.id;
+      }
+
+      await tx.allowedEmail.create({
+        data: {
+          email: email.trim().toLowerCase(),
+          isAdmin,
+          employeeId: resolvedEmployeeId,
+        },
       });
-      resolvedEmployeeId = created.id;
-    }
-
-    await tx.allowedEmail.create({
-      data: {
-        email: email.trim().toLowerCase(),
-        isAdmin,
-        employeeId: resolvedEmployeeId,
-      },
     });
-  });
+  } catch (error) {
+    if (isDuplicateEmailError(error)) {
+      return { status: "error", message: "このメールアドレスはすでに登録されています" };
+    }
+    throw error;
+  }
 
   revalidatePath("/admin/whitelist");
+  return { status: "success", message: `${email.trim().toLowerCase()} を追加しました。` };
 }
 
 // 既存のホワイトリスト登録の「従業員への紐付け」「管理者権限」を変更する。
 // メールアドレス自体は変更不可（変更したい場合は削除して登録し直す）。
-export async function updateAllowedEmail(id: string, formData: FormData) {
+export async function updateAllowedEmail(
+  id: string,
+  _prevState: AllowedEmailState,
+  formData: FormData,
+): Promise<AllowedEmailState> {
   await requireAdminSession();
 
   const employeeId = formData.get("employeeId");
@@ -731,7 +802,10 @@ export async function updateAllowedEmail(id: string, formData: FormData) {
   const hasExistingSelection = typeof employeeId === "string" && employeeId !== "";
   const hasNewName = typeof newEmployeeName === "string" && newEmployeeName.trim() !== "";
   if (hasExistingSelection && hasNewName) {
-    throw new Error("既存の従業員を選ぶか、新しい従業員名を入力するか、どちらか一方にしてください");
+    return {
+      status: "error",
+      message: "既存の従業員を選ぶか、新しい従業員名を入力するか、どちらか一方にしてください",
+    };
   }
 
   await prisma.$transaction(async (tx) => {
@@ -754,6 +828,7 @@ export async function updateAllowedEmail(id: string, formData: FormData) {
   });
 
   revalidatePath("/admin/whitelist");
+  return { status: "success", message: "保存しました。" };
 }
 
 export async function removeAllowedEmail(id: string): Promise<void> {

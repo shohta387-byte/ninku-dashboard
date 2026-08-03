@@ -1,12 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  clockIn,
-  clockOut,
-  getCurrentEmployee,
-  getSiteById,
-  getTodayEntriesForSelf,
-} from "@/app/actions";
+import { getCurrentEmployee, getSiteById, getTodayEntriesForSelf } from "@/app/actions";
 import { requireEmployeeSession } from "@/lib/session";
 import { TopBar } from "@/app/top-bar";
 import {
@@ -17,6 +11,8 @@ import {
   type BreakKey,
 } from "@/lib/ninku";
 import { formatJstTime } from "@/lib/jst-date";
+import { ClockInButton } from "./clock-in-button";
+import { ClockOutForm } from "./clock-out-form";
 
 export default async function ClockPage({
   searchParams,
@@ -40,7 +36,6 @@ export default async function ClockPage({
 
   const openEntry = entries.find((e) => !e.clockOut) ?? null;
   const completedEntries = entries.filter((e) => e.clockOut);
-  const clockInAction = clockIn.bind(null, siteId);
 
   // 実際の勤務時間（出勤〜現在時刻）に含まれる休憩枠しかチェックできないようにする。
   const eligibleBreaks = openEntry?.clockIn
@@ -59,53 +54,12 @@ export default async function ClockPage({
         </h1>
       </div>
 
-      {!openEntry && (
-        <form action={clockInAction}>
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-blue-600 px-5 py-6 text-xl font-bold text-white shadow-sm active:bg-blue-700"
-          >
-            作業開始（入場）
-          </button>
-        </form>
-      )}
+      {!openEntry && <ClockInButton siteId={siteId} />}
 
       {openEntry && (
         <div className="flex flex-col gap-4">
           <p className="text-lg">出勤: {formatTime(openEntry.clockIn!)}</p>
-          <form action={clockOut.bind(null, openEntry.id)} className="flex flex-col gap-4">
-            <fieldset className="flex flex-col gap-3 rounded-lg border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
-              <legend className="px-1 text-sm text-zinc-500">
-                休憩が取れなかった時間帯があればチェック（稼働として人工に加算されます）
-              </legend>
-              {eligibleBreaks.map((w) => (
-                <label key={w.key} className="flex items-center gap-3 text-lg">
-                  <input type="checkbox" name={w.key} className="h-6 w-6" />
-                  {w.label} は休憩なしで稼働した
-                </label>
-              ))}
-              {eligibleBreaks.length === 0 && (
-                <p className="text-sm text-zinc-500">
-                  現在の勤務時間には定時休憩が含まれていません。
-                </p>
-              )}
-            </fieldset>
-            <label className="flex flex-col gap-1">
-              <span className="text-sm text-zinc-500">日報（任意）</span>
-              <textarea
-                name="dailyReport"
-                rows={3}
-                placeholder="本日の作業内容など"
-                className="rounded-lg border border-black/20 px-4 py-3 dark:border-white/20 dark:bg-zinc-900"
-              />
-            </label>
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-orange-600 px-5 py-6 text-xl font-bold text-white shadow-sm active:bg-orange-700"
-            >
-              作業終了（退場）
-            </button>
-          </form>
+          <ClockOutForm entryId={openEntry.id} eligibleBreaks={eligibleBreaks} />
         </div>
       )}
 

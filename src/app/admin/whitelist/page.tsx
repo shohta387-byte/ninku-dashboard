@@ -1,10 +1,6 @@
-import {
-  addAllowedEmail,
-  getAllowedEmails,
-  getEmployees,
-  removeAllowedEmail,
-  updateAllowedEmail,
-} from "@/app/actions";
+import { getAllowedEmails, getEmployees, removeAllowedEmail } from "@/app/actions";
+import { AddAllowedEmailForm } from "./add-allowed-email-form";
+import { AllowedEmailRowForm } from "./allowed-email-row-form";
 
 export default async function WhitelistPage() {
   const [allowedEmails, employees] = await Promise.all([getAllowedEmails(), getEmployees()]);
@@ -36,41 +32,12 @@ export default async function WhitelistPage() {
                   <tr key={allowed.id} className="border-t border-black/10 dark:border-white/10">
                     <td className="px-4 py-2 align-top">{allowed.email}</td>
                     <td className="px-4 py-2 align-top">
-                      <form
-                        action={updateAllowedEmail.bind(null, allowed.id)}
-                        className="flex flex-col gap-2"
-                      >
-                        <select
-                          name="employeeId"
-                          defaultValue={allowed.employeeId ?? ""}
-                          className="rounded-lg border border-black/20 px-3 py-2 dark:border-white/20 dark:bg-zinc-900"
-                        >
-                          <option value="">紐付けない（管理者専用アカウント）</option>
-                          {employeesForRow.map((employee) => (
-                            <option key={employee.id} value={employee.id}>
-                              {employee.name}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          name="newEmployeeName"
-                          type="text"
-                          placeholder="新しい従業員名で登録する場合はこちらに入力"
-                          className="rounded-lg border border-black/20 px-3 py-2 dark:border-white/20 dark:bg-zinc-900"
-                        />
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            name="isAdmin"
-                            defaultChecked={allowed.isAdmin}
-                            className="h-5 w-5"
-                          />
-                          管理者権限
-                        </label>
-                        <button type="submit" className="self-start text-blue-600 underline">
-                          保存
-                        </button>
-                      </form>
+                      <AllowedEmailRowForm
+                        allowedId={allowed.id}
+                        employeesForRow={employeesForRow}
+                        defaultEmployeeId={allowed.employeeId ?? ""}
+                        defaultIsAdmin={allowed.isAdmin}
+                      />
                     </td>
                     <td className="px-4 py-2 text-right align-top">
                       <form action={removeAllowedEmail.bind(null, allowed.id)}>
@@ -96,57 +63,7 @@ export default async function WhitelistPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold">新しく追加する</h2>
-        <form
-          action={addAllowedEmail}
-          className="flex flex-col gap-4 rounded-lg border border-black/10 p-4 dark:border-white/10"
-        >
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-zinc-500">Googleアカウントのメールアドレス</span>
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="taro.yamada@gmail.com"
-              className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-zinc-500">既存の従業員に紐付ける（任意）</span>
-            <select
-              name="employeeId"
-              defaultValue=""
-              className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
-            >
-              <option value="">紐付けない（管理者専用アカウント）</option>
-              {availableEmployees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-zinc-500">
-              または、新しい従業員として登録する（上のプルダウンとは同時に使えません）
-            </span>
-            <input
-              name="newEmployeeName"
-              type="text"
-              placeholder="山田 太郎"
-              className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
-            />
-          </label>
-          <label className="flex items-center gap-3 text-lg">
-            <input type="checkbox" name="isAdmin" className="h-6 w-6" />
-            管理者権限を付与する
-          </label>
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-blue-600 px-5 py-4 text-lg font-bold text-white shadow-sm active:bg-blue-700"
-          >
-            追加する
-          </button>
-        </form>
+        <AddAllowedEmailForm availableEmployees={availableEmployees} />
       </section>
     </div>
   );
