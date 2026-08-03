@@ -89,6 +89,13 @@ export interface NinkuResult {
   totalNinku: number;
 }
 
+// 人工は1.25倍の残業係数がかかるため、1/64人工のような桁の細かい値になりやすい
+// （例: 3.828125）。実務上意味のある桁数ではないため、表示・集計・CSV・BigQuery連携も
+// 含めてこの計算結果を使うすべての箇所で読みやすい小数第2位に丸めておく。
+export function roundNinku(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 export function calculateNinkuFromHours(workedHours: number): NinkuResult {
   if (workedHours < 0) {
     throw new Error("workedHours cannot be negative");
@@ -100,8 +107,8 @@ export function calculateNinkuFromHours(workedHours: number): NinkuResult {
   const overtimeUnits = Math.max(0, halfHourUnits - standardUnits);
   const ninkuPerHalfHour = NINKU_PER_HOUR * HALF_HOUR; // 0.0625
 
-  const regularNinku = regularUnits * ninkuPerHalfHour;
-  const overtimeNinku = overtimeUnits * ninkuPerHalfHour * OVERTIME_MULTIPLIER;
+  const regularNinku = roundNinku(regularUnits * ninkuPerHalfHour);
+  const overtimeNinku = roundNinku(overtimeUnits * ninkuPerHalfHour * OVERTIME_MULTIPLIER);
 
   return {
     workedHours: halfHourUnits * HALF_HOUR,
@@ -109,7 +116,7 @@ export function calculateNinkuFromHours(workedHours: number): NinkuResult {
     overtimeHours: overtimeUnits * HALF_HOUR,
     regularNinku,
     overtimeNinku,
-    totalNinku: regularNinku + overtimeNinku,
+    totalNinku: roundNinku(regularNinku + overtimeNinku),
   };
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getReportEntries } from "@/app/actions";
-import { summarizeByEmployee } from "@/lib/report";
+import { summarizeByEmployee, summarizeBySite } from "@/lib/report";
 import { toCsv } from "@/lib/csv";
 import { getSession } from "@/lib/session";
 
@@ -39,7 +39,8 @@ export async function GET(request: NextRequest) {
   const siteId = siteIdParam && siteIdParam !== "" ? siteIdParam : undefined;
   const from = params.get("from");
   const to = params.get("to");
-  const type = params.get("type") === "employee" ? "employee" : "detail";
+  const typeParam = params.get("type");
+  const type = typeParam === "employee" || typeParam === "site" ? typeParam : "detail";
 
   if (!from || !to) {
     return NextResponse.json({ error: "from, to を指定してください" }, { status: 400 });
@@ -54,6 +55,15 @@ export async function GET(request: NextRequest) {
       summaries.map((s) => [s.employeeName, s.totalNinku, s.totalHours, s.entryCount]),
     );
     return csvResponse(csv, `従業員別人工_${from}_${to}.csv`);
+  }
+
+  if (type === "site") {
+    const summaries = summarizeBySite(entries);
+    const csv = toCsv(
+      ["現場", "合計人工", "合計稼働時間(h)", "打刻件数"],
+      summaries.map((s) => [s.siteName, s.totalNinku, s.totalHours, s.entryCount]),
+    );
+    return csvResponse(csv, `現場別人工_${from}_${to}.csv`);
   }
 
   const csv = toCsv(

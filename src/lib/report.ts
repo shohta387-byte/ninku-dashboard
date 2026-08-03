@@ -1,4 +1,4 @@
-import { calculateNinkuForEntry, getWorkedBreakKeysFromEntry, type NinkuResult } from "./ninku";
+import { calculateNinkuForEntry, getWorkedBreakKeysFromEntry, roundNinku, type NinkuResult } from "./ninku";
 
 export type ReportGranularity = "day" | "week" | "month";
 
@@ -99,7 +99,9 @@ export function summarizeByPeriod(
       });
     }
   }
-  return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return [...map.values()]
+    .map((p) => ({ ...p, totalNinku: roundNinku(p.totalNinku) }))
+    .sort((a, b) => a.key.localeCompare(b.key));
 }
 
 export interface EmployeeSummary {
@@ -128,11 +130,44 @@ export function summarizeByEmployee(entries: ReportEntry[]): EmployeeSummary[] {
       });
     }
   }
-  return [...map.values()].sort((a, b) => b.totalNinku - a.totalNinku);
+  return [...map.values()]
+    .map((e) => ({ ...e, totalNinku: roundNinku(e.totalNinku) }))
+    .sort((a, b) => b.totalNinku - a.totalNinku);
+}
+
+export interface SiteSummary {
+  siteId: string;
+  siteName: string;
+  totalNinku: number;
+  totalHours: number;
+  entryCount: number;
+}
+
+export function summarizeBySite(entries: ReportEntry[]): SiteSummary[] {
+  const map = new Map<string, SiteSummary>();
+  for (const entry of entries) {
+    const existing = map.get(entry.siteId);
+    if (existing) {
+      existing.totalNinku += entry.ninku.totalNinku;
+      existing.totalHours += entry.ninku.workedHours;
+      existing.entryCount += 1;
+    } else {
+      map.set(entry.siteId, {
+        siteId: entry.siteId,
+        siteName: entry.siteName,
+        totalNinku: entry.ninku.totalNinku,
+        totalHours: entry.ninku.workedHours,
+        entryCount: 1,
+      });
+    }
+  }
+  return [...map.values()]
+    .map((s) => ({ ...s, totalNinku: roundNinku(s.totalNinku) }))
+    .sort((a, b) => b.totalNinku - a.totalNinku);
 }
 
 export function sumNinku(entries: ReportEntry[]): number {
-  return entries.reduce((sum, e) => sum + e.ninku.totalNinku, 0);
+  return roundNinku(entries.reduce((sum, e) => sum + e.ninku.totalNinku, 0));
 }
 
 export function sumHours(entries: ReportEntry[]): number {

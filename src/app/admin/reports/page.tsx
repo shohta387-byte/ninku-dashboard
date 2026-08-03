@@ -3,6 +3,7 @@ import { getReportEntries, getSitesForAdmin } from "@/app/actions";
 import {
   summarizeByEmployee,
   summarizeByPeriod,
+  summarizeBySite,
   sumHours,
   sumNinku,
   type ReportGranularity,
@@ -58,9 +59,11 @@ export default async function ReportsPage({
 
   const periodSummaries = summarizeByPeriod(entries, groupBy);
   const employeeSummaries = summarizeByEmployee(entries);
+  const siteSummaries = summarizeBySite(entries);
   const totalNinku = sumNinku(entries);
   const totalHours = sumHours(entries);
   const selectedSiteName = siteId ? (sites.find((s) => s.id === siteId)?.name ?? "") : "全現場";
+  const maxSiteNinku = Math.max(1, ...siteSummaries.map((s) => s.totalNinku));
 
   return (
     <div className="flex flex-col gap-8">
@@ -142,6 +145,65 @@ export default async function ReportsPage({
           >
             従業員別人工をCSVでダウンロード
           </a>
+          <a
+            href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from, to, type: "site" })}`}
+            className="text-blue-600 underline"
+          >
+            現場別人工をCSVでダウンロード
+          </a>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-bold">現場ごとの人工（期間合計）</h2>
+        <p className="text-sm text-zinc-500">
+          どの現場にどれだけ人工がかかっているか、期間内で比較できます。現場名をクリックすると、その現場だけに絞り込めます。
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-zinc-50 dark:bg-zinc-900">
+              <tr>
+                <th className="px-4 py-2">現場</th>
+                <th className="px-4 py-2">人工</th>
+                <th className="px-4 py-2">稼働時間</th>
+                <th className="px-4 py-2">打刻件数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {siteSummaries.map((s) => (
+                <tr key={s.siteId} className="border-t border-black/10 dark:border-white/10">
+                  <td className="px-4 py-2">
+                    <Link
+                      href={`/admin/reports?${new URLSearchParams({ siteId: s.siteId, from, to, groupBy })}`}
+                      className="text-blue-600 underline"
+                    >
+                      {s.siteName}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-10 shrink-0 font-bold">{s.totalNinku}</span>
+                      <span className="h-2 flex-1 min-w-[3rem] max-w-[10rem] overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <span
+                          className="block h-full rounded-full bg-blue-600"
+                          style={{ width: `${(s.totalNinku / maxSiteNinku) * 100}%` }}
+                        />
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2">{s.totalHours}h</td>
+                  <td className="px-4 py-2">{s.entryCount}</td>
+                </tr>
+              ))}
+              {siteSummaries.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-4 text-center text-zinc-500">
+                    この条件に一致する打刻はありません。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
