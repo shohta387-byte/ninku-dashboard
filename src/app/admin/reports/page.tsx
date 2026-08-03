@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getReportEntries, getSitesForAdmin } from "@/app/actions";
+import { getEarliestWorkDate, getReportEntries, getSitesForAdmin } from "@/app/actions";
 import {
   summarizeByEmployee,
   summarizeByPeriod,
@@ -43,7 +43,7 @@ const GRANULARITY_LABELS: Record<ReportGranularity, string> = {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ siteId?: string; from?: string; to?: string; groupBy?: string }>;
+  searchParams: Promise<{ siteId?: string; from?: string; to?: string; groupBy?: string; range?: string }>;
 }) {
   const params = await searchParams;
   const siteId = params.siteId || "";
@@ -51,11 +51,22 @@ export default async function ReportsPage({
   const to = params.to || today();
   const groupBy: ReportGranularity =
     params.groupBy === "week" || params.groupBy === "month" ? params.groupBy : "day";
+  const isAllTime = params.range === "all";
 
-  const [sites, entries] = await Promise.all([
+  const [sites, earliestWorkDate] = await Promise.all([
     getSitesForAdmin(),
-    getReportEntries({ siteId: siteId || undefined, from, to }),
+    isAllTime ? getEarliestWorkDate(siteId || undefined) : Promise.resolve(null),
   ]);
+
+  // 「全期間」を選んだ場合は、その現場（全現場なら全体）で最初に打刻された日〜今日までを使う。
+  const effectiveFrom = isAllTime ? (earliestWorkDate ? toDateInputValue(earliestWorkDate) : today()) : from;
+  const effectiveTo = isAllTime ? today() : to;
+
+  const entries = await getReportEntries({
+    siteId: siteId || undefined,
+    from: effectiveFrom,
+    to: effectiveTo,
+  });
 
   const periodSummaries = summarizeByPeriod(entries, groupBy);
   const employeeSummaries = summarizeByEmployee(entries);
@@ -65,11 +76,18 @@ export default async function ReportsPage({
   const selectedSiteName = siteId ? (sites.find((s) => s.id === siteId)?.name ?? "") : "全現場";
   const maxSiteNinku = Math.max(1, ...siteSummaries.map((s) => s.totalNinku));
 
+  // 現場ごとの表・CSVリンクなど、他の画面へ遷移するリンクに引き継ぐ検索条件。
+  // 「全期間」中はリンク先でも改めて全期間として計算し直させたいので、日付そのものではなく
+  // range=all を引き継ぐ（現場ごとに最初の打刻日は異なるため）。
+  const linkParams: Record<string, string> = isAllTime
+    ? { range: "all", groupBy }
+    : { from: effectiveFrom, to: effectiveTo, groupBy };
+
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold">検索条件</h2>
-        <form className="flex flex-wrap items-end gap-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
+        <form className="group flex flex-wrap items-end gap-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
           <label className="flex flex-col gap-1">
             <span className="text-sm text-zinc-500">現場</span>
             <select
@@ -85,24 +103,39 @@ export default async function ReportsPage({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-zinc-500">開始日</span>
-            <input
-              name="from"
-              type="date"
-              defaultValue={from}
-              className="rounded-lg border border-black/20 px-3 py-2 dark:border-white/20 dark:bg-zinc-900"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-zinc-500">終了日</span>
-            <input
-              name="to"
-              type="date"
-              defaultValue={to}
-              className="rounded-lg border border-black/20 px-3 py-2 dark:border-white/20 dark:bg-zinc-900"
-            />
-          </label>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm text-zinc-500">対象期間</span>
+            <div className="flex items-center gap-4 py-2">
+              <label className="flex items-center gap-1.5 text-sm">
+                <input type="radio" name="range" value="custom" defaultChecked={!isAllTime} />
+                期間を指定
+              </label>
+              <label className="flex items-center gap-1.5 text-sm">
+                <input id="range-all" type="radio" name="range" value="all" defaultChecked={isAllTime} />
+                全期間（現場に入り始めた初日から今日まで）
+              </label>
+            </div>
+          </div>
+          <div className="flex items-end gap-4 transition-opacity group-has-[#range-all:checked]:pointer-events-none group-has-[#range-all:checked]:opacity-40">
+            <label className="flex flex-col gap-1">
+              <span className="text-sm text-zinc-500">開始日</span>
+              <input
+                name="from"
+                type="date"
+                defaultValue={effectiveFrom}
+                className="rounded-lg border border-black/20 px-3 py-2 dark:border-white/20 dark:bg-zinc-900"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-sm text-zinc-500">終了日</span>
+              <input
+                name="to"
+                type="date"
+                defaultValue={effectiveTo}
+                className="rounded-lg border border-black/20 px-3 py-2 dark:border-white/20 dark:bg-zinc-900"
+              />
+            </label>
+          </div>
           <label className="flex flex-col gap-1">
             <span className="text-sm text-zinc-500">集計単位</span>
             <select
@@ -126,7 +159,7 @@ export default async function ReportsPage({
 
       <section className="flex flex-col gap-2 rounded-lg border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
         <p className="text-sm text-zinc-500">
-          {selectedSiteName} / {from} 〜 {to}
+          {selectedSiteName} / {isAllTime ? `全期間（${effectiveFrom} 〜 ${effectiveTo}）` : `${effectiveFrom} 〜 ${effectiveTo}`}
         </p>
         <p className="text-3xl font-bold">合計人工: {totalNinku}</p>
         <p className="text-sm text-zinc-500">
@@ -134,19 +167,19 @@ export default async function ReportsPage({
         </p>
         <div className="flex gap-4 pt-2 text-sm">
           <a
-            href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from, to, type: "detail" })}`}
+            href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from: effectiveFrom, to: effectiveTo, type: "detail" })}`}
             className="text-blue-600 underline"
           >
             打刻詳細をCSVでダウンロード
           </a>
           <a
-            href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from, to, type: "employee" })}`}
+            href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from: effectiveFrom, to: effectiveTo, type: "employee" })}`}
             className="text-blue-600 underline"
           >
             従業員別人工をCSVでダウンロード
           </a>
           <a
-            href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from, to, type: "site" })}`}
+            href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from: effectiveFrom, to: effectiveTo, type: "site" })}`}
             className="text-blue-600 underline"
           >
             現場別人工をCSVでダウンロード
@@ -174,7 +207,7 @@ export default async function ReportsPage({
                 <tr key={s.siteId} className="border-t border-black/10 dark:border-white/10">
                   <td className="px-4 py-2">
                     <Link
-                      href={`/admin/reports?${new URLSearchParams({ siteId: s.siteId, from, to, groupBy })}`}
+                      href={`/admin/reports?${new URLSearchParams({ siteId: s.siteId, ...linkParams })}`}
                       className="text-blue-600 underline"
                     >
                       {s.siteName}

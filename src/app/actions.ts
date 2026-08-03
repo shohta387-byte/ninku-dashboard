@@ -678,6 +678,23 @@ export async function getReportEntries(filters: ReportFilters): Promise<ReportEn
     );
 }
 
+// その現場（未指定なら全現場）で最初に打刻された日を返す。「全期間」表示の開始日に使う。
+export async function getEarliestWorkDate(siteId?: string): Promise<Date | null> {
+  await requireAdminSession();
+
+  const earliest = await prisma.timeEntry.findFirst({
+    where: {
+      clockIn: { not: null },
+      clockOut: { not: null },
+      ...(siteId ? { siteId } : {}),
+    },
+    orderBy: { workDate: "asc" },
+    select: { workDate: true },
+  });
+
+  return earliest?.workDate ?? null;
+}
+
 // --- 管理者: BigQuery連携 ---
 
 export interface SyncBigQueryState {
