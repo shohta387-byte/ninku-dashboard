@@ -1,6 +1,7 @@
 {
   "permissions": {
-    "allow": ["Bash"],
+    "allow": ["Bash", "PowerShell"],
     "defaultMode": "bypassPermissions"
-  }
+  },
+  "skipDangerousModePermissionPrompt": true
 }

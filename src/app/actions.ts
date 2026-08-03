@@ -163,17 +163,13 @@ export interface CreateSiteState {
   siteId?: string;
 }
 
-// 現場は「みんなで付け足していく」想定のため、ログインしていれば従業員・管理者どちらでも
-// 新規登録できる（管理者限定にしない）。同名・近接の現場がある場合は一度警告し、
+// 現場の新規登録は管理者のみ行える。同名・近接の現場がある場合は一度警告し、
 // 表記ゆれや重複登録に気づけるようにする。
 export async function createSite(
   _prevState: CreateSiteState,
   formData: FormData,
 ): Promise<CreateSiteState> {
-  const session = await getSession();
-  if (!session) {
-    redirect("/login");
-  }
+  await requireAdminSession();
 
   const name = formData.get("name");
   const lat = formData.get("lat");
