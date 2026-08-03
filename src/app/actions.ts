@@ -863,3 +863,23 @@ export async function syncToBigQueryAction(
     };
   }
 }
+
+// --- 管理者: 喚起メール ---
+
+// 稼働中の従業員を、喚起メールの送信可否を設定する画面用に返す。
+// メールはホワイトリストに登録されたGoogleアカウントのアドレスへ送るため、
+// 紐付けがない従業員は一覧には出すが送信対象にはできない。
+export async function getEmployeesForReminderSettings() {
+  await requireAdminSession();
+  return prisma.employee.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+    include: { allowedEmail: true },
+  });
+}
+
+export async function setReminderEmailEnabled(employeeId: string, enabled: boolean): Promise<void> {
+  await requireAdminSession();
+  await prisma.employee.update({ where: { id: employeeId }, data: { reminderEmailEnabled: enabled } });
+  revalidatePath("/admin/reminder-emails");
+}

@@ -16,6 +16,8 @@ model Employee {
   id           String        @id @default(cuid())
   name         String
   isActive     Boolean       @default(true)
+  // 平日19:30時点で本日の打刻がない場合に喚起メールを送るかどうか（管理画面の「喚起メール」で切替）。
+  reminderEmailEnabled Boolean @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   timeEntries  TimeEntry[]

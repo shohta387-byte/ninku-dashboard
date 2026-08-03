@@ -18,6 +18,9 @@ export function AdminNav() {
       <Link href="/admin/whitelist" className="underline">
         ホワイトリスト
       </Link>
+      <Link href="/admin/reminder-emails" className="underline">
+        喚起メール
+      </Link>
       <Link href="/admin/bigquery" className="underline">
         BigQuery連携
       </Link>
