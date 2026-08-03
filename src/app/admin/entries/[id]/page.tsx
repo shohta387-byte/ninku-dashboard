@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEntryDetail } from "@/app/actions";
 import { BREAK_WINDOWS, getWorkedBreakKeysFromEntry } from "@/lib/ninku";
+import { formatJstDate, formatJstDateTime } from "@/lib/jst-date";
 
 function formatDateTime(date: Date | null): string {
   if (!date) return "—";
-  return date.toLocaleString("ja-JP", {
+  return formatJstDateTime(date, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -15,7 +16,7 @@ function formatDateTime(date: Date | null): string {
 }
 
 function formatDate(date: Date): string {
-  return date.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return formatJstDate(date, { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 export default async function AdminEntryDetailPage({

@@ -8,30 +8,31 @@ import {
   sumNinku,
   type ReportGranularity,
 } from "@/lib/report";
+import { formatJstDate, formatJstTime, todayInJst, toJstInputValue, toJstParts } from "@/lib/jst-date";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
 function toDateInputValue(date: Date): string {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  return toJstInputValue(date);
 }
 
 function firstDayOfThisMonth(): string {
-  const now = new Date();
-  return toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1));
+  const { year, month } = toJstParts(todayInJst());
+  return `${year}-${pad2(month)}-01`;
 }
 
 function today(): string {
-  return toDateInputValue(new Date());
+  return toJstInputValue(todayInJst());
 }
 
 function formatTime(date: Date): string {
-  return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  return formatJstTime(date, { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(date: Date): string {
-  return date.toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit", weekday: "short" });
+  return formatJstDate(date, { month: "2-digit", day: "2-digit", weekday: "short" });
 }
 
 const GRANULARITY_LABELS: Record<ReportGranularity, string> = {

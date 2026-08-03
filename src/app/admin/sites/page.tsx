@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { getSiteLifetimeSummaries, setSiteActive } from "@/app/actions";
+import { toJstInputValue } from "@/lib/jst-date";
 
 function formatDate(date: Date | null): string {
   if (!date) return "—";
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return toJstInputValue(date);
 }
 
 type SiteSummary = Awaited<ReturnType<typeof getSiteLifetimeSummaries>>[number];

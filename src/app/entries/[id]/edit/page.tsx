@@ -2,12 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adjustTimeEntryForm, getTimeEntryById } from "@/app/actions";
 import { roundToTimeStep } from "@/lib/ninku";
+import { toJstParts } from "@/lib/jst-date";
 
 function formatTimeStep(date: Date): string {
   const rounded = roundToTimeStep(date);
-  const hh = String(rounded.getHours()).padStart(2, "0");
-  const mm = String(rounded.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  const { hour, minute } = toJstParts(rounded);
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function generateTimeOptions(): string[] {

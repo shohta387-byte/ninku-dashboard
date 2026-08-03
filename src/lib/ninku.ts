@@ -1,3 +1,5 @@
+import { fromJstParts, toJstParts } from "./jst-date";
+
 export const STANDARD_WORK_HOURS = 8;
 export const TIME_STEP_MINUTES = 10;
 export const TIME_STEP_HOURS = TIME_STEP_MINUTES / 60; // 1/6
@@ -29,16 +31,16 @@ function breakWindowHours(w: BreakWindow): number {
 
 export const BREAK_HOURS = BREAK_WINDOWS.reduce((sum, w) => sum + breakWindowHours(w), 0);
 
+// workDateは日本時間のその日を表す絶対時刻。休憩枠の時刻は日本時間の壁時計時刻なので、
+// サーバーの実行タイムゾーンに関わらず正しい絶対時刻になるようjst-date経由で組み立てる。
 function breakWindowStart(w: BreakWindow, workDate: Date): Date {
-  const d = new Date(workDate);
-  d.setHours(w.startHour, w.startMinute, 0, 0);
-  return d;
+  const { year, month, day } = toJstParts(workDate);
+  return fromJstParts(year, month, day, w.startHour, w.startMinute);
 }
 
 function breakWindowEnd(w: BreakWindow, workDate: Date): Date {
-  const d = new Date(workDate);
-  d.setHours(w.endHour, w.endMinute, 0, 0);
-  return d;
+  const { year, month, day } = toJstParts(workDate);
+  return fromJstParts(year, month, day, w.endHour, w.endMinute);
 }
 
 // 実際の勤務時間（clockIn〜clockOut）に完全に含まれている休憩枠だけを返す。

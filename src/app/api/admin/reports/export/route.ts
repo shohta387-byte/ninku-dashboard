@@ -3,18 +3,15 @@ import { getReportEntries } from "@/app/actions";
 import { summarizeByEmployee, summarizeBySite } from "@/lib/report";
 import { toCsv } from "@/lib/csv";
 import { getSession } from "@/lib/session";
+import { toJstInputValue, toJstParts } from "@/lib/jst-date";
 
 function formatDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return toJstInputValue(date);
 }
 
 function formatTime(date: Date): string {
-  const h = String(date.getHours()).padStart(2, "0");
-  const m = String(date.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
+  const { hour, minute } = toJstParts(date);
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function csvResponse(csv: string, filename: string): NextResponse {

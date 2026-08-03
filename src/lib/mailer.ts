@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { formatJstDate } from "./jst-date";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -24,7 +25,7 @@ function getTransporter() {
 }
 
 function formatDateLabel(date: Date): string {
-  return date.toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "long" });
+  return formatJstDate(date, { month: "long", day: "numeric", weekday: "long" });
 }
 
 function buildReminderText(employeeName: string, date: Date): string {

@@ -16,6 +16,7 @@ import {
   getWorkedBreakKeysFromEntry,
   type BreakKey,
 } from "@/lib/ninku";
+import { formatJstTime } from "@/lib/jst-date";
 
 export default async function ClockPage({
   searchParams,
@@ -171,7 +172,7 @@ function EntrySummary({
 }
 
 function formatTime(date: Date): string {
-  return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  return formatJstTime(date, { hour: "2-digit", minute: "2-digit" });
 }
 
 function breakLabel(key: BreakKey): string {

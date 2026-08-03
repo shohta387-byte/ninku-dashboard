@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { createEntryForEmployee, type CreateEntryForEmployeeState } from "@/app/actions";
 import { BREAK_WINDOWS, getBreakWindowsWithinSpan } from "@/lib/ninku";
+import { jstDateTimeFromHHMM, jstMidnightFromInputValue, toJstInputValue, todayInJst } from "@/lib/jst-date";
 
 type Employee = { id: string; name: string };
 type Site = { id: string; name: string };
@@ -17,26 +18,8 @@ function generateTimeOptions(): string[] {
   return options;
 }
 
-function toLocalDate(dateStr: string): Date | null {
-  if (!dateStr) return null;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
-}
-
-function combineDateAndTime(date: Date, hhmm: string): Date {
-  const [h, m] = hhmm.split(":").map(Number);
-  const result = new Date(date);
-  result.setHours(h, m, 0, 0);
-  return result;
-}
-
 function todayInputValue(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return toJstInputValue(todayInJst());
 }
 
 const TIME_OPTIONS = generateTimeOptions();
@@ -48,11 +31,15 @@ export function AdminEntryForm({ employees, sites }: { employees: Employee[]; si
   const [clockInTime, setClockInTime] = useState("07:30");
   const [clockOutTime, setClockOutTime] = useState("17:30");
 
+  // 日付・時刻はいずれも日本時間として扱う（端末のタイムゾーン設定に関わらず一定にするため
+  // jst-date経由で組み立てる）。
   const eligibleKeys = useMemo(() => {
-    const workDate = toLocalDate(date);
-    if (!workDate) return new Set<string>();
-    const clockIn = combineDateAndTime(workDate, clockInTime);
-    const clockOut = combineDateAndTime(workDate, clockOutTime);
+    if (!date) return new Set<string>();
+    const workDate = jstMidnightFromInputValue(date);
+    const [y, m, d] = date.split("-").map(Number);
+    if (!y || !m || !d) return new Set<string>();
+    const clockIn = jstDateTimeFromHHMM({ year: y, month: m, day: d }, clockInTime);
+    const clockOut = jstDateTimeFromHHMM({ year: y, month: m, day: d }, clockOutTime);
     if (clockOut <= clockIn) return new Set<string>();
     return new Set(getBreakWindowsWithinSpan(workDate, clockIn, clockOut).map((w) => w.key));
   }, [date, clockInTime, clockOutTime]);

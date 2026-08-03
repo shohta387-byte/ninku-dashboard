@@ -2,6 +2,7 @@ import { Readable } from "stream";
 import { BigQuery, type Table } from "@google-cloud/bigquery";
 import { prisma } from "@/lib/prisma";
 import { calculateNinkuForEntry, getWorkedBreakKeysFromEntry } from "@/lib/ninku";
+import { toJstInputValue } from "@/lib/jst-date";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -81,10 +82,7 @@ const SITE_SCHEMA: BqField[] = [
 ];
 
 function toBigQueryDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return toJstInputValue(date);
 }
 
 export interface SyncResult {

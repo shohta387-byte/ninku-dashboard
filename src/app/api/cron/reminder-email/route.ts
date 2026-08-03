@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isJapaneseHoliday } from "@/lib/holidays";
-import { isWeekday, todayInJst } from "@/lib/jst-date";
+import { isWeekdayJst, todayInJst } from "@/lib/jst-date";
 import { sendReminderEmail } from "@/lib/mailer";
 
 // Vercel Cron（vercel.jsonの"crons"）から平日19:30 JST(=10:30 UTC)に呼び出される想定。
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   }
 
   const today = todayInJst();
-  if (!isWeekday(today) || isJapaneseHoliday(today)) {
+  if (!isWeekdayJst(today) || isJapaneseHoliday(today)) {
     return NextResponse.json({ skipped: true, reason: "holiday_or_weekend" });
   }
 

@@ -13,16 +13,15 @@ import {
   requireAdminSession,
   requireEmployeeSession,
 } from "@/lib/session";
+import { jstMidnightFromInputValue, jstDateTimeFromHHMM, toJstParts, todayInJst } from "@/lib/jst-date";
 
 function startOfToday(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return todayInJst();
 }
 
-// "YYYY-MM-DD" をその日のローカル0時のDateに変換する
+// "YYYY-MM-DD" を日本時間のその日0時0分の絶対時刻に変換する
 function startOfDateString(dateStr: string): Date {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  return jstMidnightFromInputValue(dateStr);
 }
 
 // 打刻の作成・変更のたびにBigQueryを全件同期する。ユーザーの打刻操作をブロックしたくないので
@@ -393,13 +392,8 @@ export async function createManualTimeEntry(formData: FormData) {
     throw new Error("未来の日付は追加できません");
   }
 
-  const newClockIn = new Date(workDate);
-  const [inH, inM] = clockInTime.split(":").map(Number);
-  newClockIn.setHours(inH, inM, 0, 0);
-
-  const newClockOut = new Date(workDate);
-  const [outH, outM] = clockOutTime.split(":").map(Number);
-  newClockOut.setHours(outH, outM, 0, 0);
+  const newClockIn = combineDateAndTime(workDate, clockInTime);
+  const newClockOut = combineDateAndTime(workDate, clockOutTime);
 
   if (newClockOut <= newClockIn) {
     throw new Error("退勤時刻は出勤時刻より後にしてください");
@@ -498,12 +492,10 @@ export async function adjustTimeEntry(
   return entry;
 }
 
-// "HH:MM" 形式の文字列を、対象日の時刻を持つDateに変換する
+// "HH:MM" 形式の文字列を、baseDateと同じ日本時間の日付・指定時刻を持つ絶対時刻に変換する
 function combineDateAndTime(baseDate: Date, hhmm: string): Date {
-  const [hours, minutes] = hhmm.split(":").map(Number);
-  const result = new Date(baseDate);
-  result.setHours(hours, minutes, 0, 0);
-  return result;
+  const { year, month, day } = toJstParts(baseDate);
+  return jstDateTimeFromHHMM({ year, month, day }, hhmm);
 }
 
 // /entries/[id]/edit のフォーム(action属性)から直接呼び出すためのラッパー。
