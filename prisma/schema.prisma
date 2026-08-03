@@ -40,8 +40,10 @@ model AllowedEmail {
 model Site {
   id          String      @id @default(cuid())
   name        String
-  lat         Float
-  lng         Float
+  // 位置情報は任意（未設定でも現場を登録できる。地図表示・現在地からの距離順表示・
+  // 近接重複検出は、設定されている現場同士でのみ行われる）。
+  lat         Float?
+  lng         Float?
   isActive    Boolean     @default(true)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt

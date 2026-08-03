@@ -32,7 +32,9 @@ function SiteTable({ summaries }: { summaries: SiteSummary[] }) {
                 </Link>
               </td>
               <td className="px-4 py-2 text-xs text-zinc-500">
-                {site.lat.toFixed(5)}, {site.lng.toFixed(5)}
+                {site.lat !== null && site.lng !== null
+                  ? `${site.lat.toFixed(5)}, ${site.lng.toFixed(5)}`
+                  : "未設定"}
               </td>
               <td className="px-4 py-2 font-bold">{totalNinku}</td>
               <td className="px-4 py-2">{totalHours}h</td>

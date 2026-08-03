@@ -183,25 +183,29 @@ export async function createSite(
   if (typeof name !== "string" || name.trim() === "") {
     return { status: "error", message: "現場名を入力してください" };
   }
-  if (typeof lat !== "string" || typeof lng !== "string" || lat === "" || lng === "") {
-    return {
-      status: "error",
-      message: "位置情報を設定してください（現在地を使うか、住所で検索してください）",
-    };
-  }
-  const latNum = Number(lat);
-  const lngNum = Number(lng);
-  if (Number.isNaN(latNum) || Number.isNaN(lngNum)) {
-    return { status: "error", message: "位置情報が正しくありません" };
+
+  // 位置情報は任意。入力されている場合のみ数値として検証する。
+  const hasLocation = typeof lat === "string" && typeof lng === "string" && lat !== "" && lng !== "";
+  let latNum: number | null = null;
+  let lngNum: number | null = null;
+  if (hasLocation) {
+    latNum = Number(lat);
+    lngNum = Number(lng);
+    if (Number.isNaN(latNum) || Number.isNaN(lngNum)) {
+      return { status: "error", message: "位置情報が正しくありません" };
+    }
   }
 
   if (!confirmDuplicate) {
     const existingSites = await prisma.site.findMany({ where: { isActive: true } });
     const normalizedNew = normalizeSiteName(name);
     const nameMatch = existingSites.find((s) => normalizeSiteName(s.name) === normalizedNew);
-    const nearbyMatch = existingSites.find(
-      (s) => distanceInMeters(s.lat, s.lng, latNum, lngNum) < 100,
-    );
+    const nearbyMatch =
+      latNum !== null && lngNum !== null
+        ? existingSites.find(
+            (s) => s.lat !== null && s.lng !== null && distanceInMeters(s.lat, s.lng, latNum!, lngNum!) < 100,
+          )
+        : undefined;
     if (nameMatch || nearbyMatch) {
       const reasons = [
         nameMatch ? `「${nameMatch.name}」と同じ名前` : null,

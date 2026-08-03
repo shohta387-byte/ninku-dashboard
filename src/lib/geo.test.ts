@@ -22,6 +22,17 @@ describe("sortSitesByDistance", () => {
     // 現在地を渋谷に近い座標にする
     const sorted = sortSitesByDistance(sites, 35.659, 139.702);
     expect(sorted[0].id).toBe("near");
-    expect(sorted[0].distanceKm).toBeLessThan(sorted[1].distanceKm);
+    expect(sorted[0].distanceKm).toBeLessThan(sorted[1].distanceKm!);
+  });
+
+  it("places sites without location after the ones with a known distance", () => {
+    const sites = [
+      { id: "no-location", lat: null, lng: null },
+      { id: "far", lat: 35.7295, lng: 139.7109 }, // 池袋
+      { id: "near", lat: 35.658, lng: 139.7016 }, // 渋谷
+    ];
+    const sorted = sortSitesByDistance(sites, 35.659, 139.702);
+    expect(sorted.map((s) => s.id)).toEqual(["near", "far", "no-location"]);
+    expect(sorted[2].distanceKm).toBeUndefined();
   });
 });

@@ -15,12 +15,22 @@ export function haversineDistanceKm(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function sortSitesByDistance<T extends { lat: number; lng: number }>(
+// 位置情報が未設定の現場は距離を計算できないため、距離が近い順に並べた現場の
+// 後ろにそのままの順番でつなげる（distanceKmは付けない）。
+export function sortSitesByDistance<T extends { lat: number | null; lng: number | null }>(
   sites: T[],
   userLat: number,
   userLng: number,
-): (T & { distanceKm: number })[] {
-  return sites
-    .map((s) => ({ ...s, distanceKm: haversineDistanceKm(userLat, userLng, s.lat, s.lng) }))
-    .sort((a, b) => a.distanceKm - b.distanceKm);
+): (T & { distanceKm?: number })[] {
+  const withLocation: (T & { distanceKm: number })[] = [];
+  const withoutLocation: T[] = [];
+  for (const s of sites) {
+    if (s.lat === null || s.lng === null) {
+      withoutLocation.push(s);
+    } else {
+      withLocation.push({ ...s, distanceKm: haversineDistanceKm(userLat, userLng, s.lat, s.lng) });
+    }
+  }
+  withLocation.sort((a, b) => a.distanceKm - b.distanceKm);
+  return [...withLocation, ...withoutLocation];
 }

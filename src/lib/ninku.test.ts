@@ -5,12 +5,15 @@ import {
   computeWorkedHours,
   getBreakWindowsWithinSpan,
 } from "./ninku";
+import { fromJstParts, jstMidnight } from "./jst-date";
 
+// テスト実行環境の実行タイムゾーンに関わらず結果が一定になるよう、日本時間として
+// 明示的に絶対時刻を組み立てる（本番相当のUTC実行環境でテストしても壊れないように）。
 function time(hour: number, minute: number): Date {
-  return new Date(2026, 0, 1, hour, minute, 0, 0);
+  return fromJstParts(2026, 1, 1, hour, minute);
 }
 
-const workDate = new Date(2026, 0, 1);
+const workDate = jstMidnight(2026, 1, 1);
 
 describe("computeWorkedHours", () => {
   it("07:30-17:30 -> 8h (standard full day)", () => {
@@ -29,8 +32,8 @@ describe("computeWorkedHours", () => {
     expect(computeWorkedHours(time(9, 0), time(9, 30))).toBe(0);
   });
 
-  it("07:15-17:30 -> 8h (07:15 rounds to 07:30)", () => {
-    expect(computeWorkedHours(time(7, 15), time(17, 30))).toBe(8);
+  it("07:12-17:30 -> 8.3h (07:12 rounds to 07:10, 10-minute step)", () => {
+    expect(computeWorkedHours(time(7, 12), time(17, 30))).toBeCloseTo(8 + 1 / 3, 10);
   });
 
   it("throws when clockOut is not after clockIn", () => {
@@ -49,7 +52,7 @@ describe("computeWorkedHours", () => {
     expect(computeWorkedHours(time(8, 0), time(12, 0), ["break1"])).toBe(2.5);
   });
 
-  it("10:00-10:05 -> 0h (valid order, but rounds into the same half-hour bucket)", () => {
+  it("10:00-10:05 -> 0h (valid order, but rounds into the same 10-minute bucket)", () => {
     expect(computeWorkedHours(time(10, 0), time(10, 5))).toBe(0);
   });
 });
@@ -67,9 +70,10 @@ describe("calculateNinkuFromHours", () => {
     expect(r.totalNinku).toBeCloseTo(0.5, 10);
   });
 
-  it("0.5h -> 0.0625", () => {
+  // 人工・稼働時間はいずれも読みやすさのため小数第2位に丸めて返す(ninku.tsのroundNinku/roundHours参照)。
+  it("0.5h -> 0.06 (0.0625を小数第2位に丸め)", () => {
     const r = calculateNinkuFromHours(0.5);
-    expect(r.totalNinku).toBeCloseTo(0.0625, 10);
+    expect(r.totalNinku).toBeCloseTo(0.06, 10);
   });
 
   it("0h -> 0", () => {
@@ -77,21 +81,21 @@ describe("calculateNinkuFromHours", () => {
     expect(r.totalNinku).toBe(0);
   });
 
-  it("9h -> 1.15625 (1h overtime at 1.25x)", () => {
+  it("9h -> 1.16 (1h overtime at 1.25x, 1.15625を丸め)", () => {
     const r = calculateNinkuFromHours(9);
     expect(r.regularHours).toBe(8);
     expect(r.overtimeHours).toBe(1);
-    expect(r.totalNinku).toBeCloseTo(1.15625, 10);
+    expect(r.totalNinku).toBeCloseTo(1.16, 10);
   });
 
-  it("10h -> 1.3125 (2h overtime at 1.25x)", () => {
+  it("10h -> 1.31 (2h overtime at 1.25x, 1.3125を丸め)", () => {
     const r = calculateNinkuFromHours(10);
-    expect(r.totalNinku).toBeCloseTo(1.3125, 10);
+    expect(r.totalNinku).toBeCloseTo(1.31, 10);
   });
 
-  it("8.5h -> 1.078125 (0.5h overtime at 1.25x)", () => {
+  it("8.5h -> 1.08 (0.5h overtime at 1.25x, 1.078125を丸め)", () => {
     const r = calculateNinkuFromHours(8.5);
-    expect(r.totalNinku).toBeCloseTo(1.078125, 10);
+    expect(r.totalNinku).toBeCloseTo(1.08, 10);
   });
 
   it("throws for negative hours", () => {
@@ -104,8 +108,8 @@ describe("calculateNinkuForEntry", () => {
     expect(calculateNinkuForEntry(time(7, 30), time(17, 30)).totalNinku).toBeCloseTo(1.0, 10);
   });
 
-  it("07:30-19:30 -> totalNinku 1.3125", () => {
-    expect(calculateNinkuForEntry(time(7, 30), time(19, 30)).totalNinku).toBeCloseTo(1.3125, 10);
+  it("07:30-19:30 -> totalNinku 1.31 (1.3125を丸め)", () => {
+    expect(calculateNinkuForEntry(time(7, 30), time(19, 30)).totalNinku).toBeCloseTo(1.31, 10);
   });
 });
 

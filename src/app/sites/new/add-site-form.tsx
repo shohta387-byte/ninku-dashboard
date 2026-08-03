@@ -99,7 +99,12 @@ export function AddSiteForm() {
       </label>
 
       <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
-        <p className="text-sm text-zinc-500">位置情報</p>
+        <div>
+          <p className="text-sm text-zinc-500">位置情報（任意）</p>
+          <p className="text-xs text-zinc-400">
+            設定しなくても現場を登録できますが、地図表示や近くの現場から探す機能が使えなくなります。
+          </p>
+        </div>
 
         <button
           type="button"
@@ -179,7 +184,7 @@ export function AddSiteForm() {
 
       <button
         type="submit"
-        disabled={isPending || lat === null || lng === null}
+        disabled={isPending}
         className="w-full rounded-lg bg-blue-600 px-5 py-4 text-lg font-bold text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
       >
         {isPending ? "登録中…" : showDuplicateWarning ? "それでも登録する" : "登録する"}

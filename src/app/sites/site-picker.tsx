@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { sortSitesByDistance } from "@/lib/geo";
 
-type Site = { id: string; name: string; lat: number; lng: number };
+type Site = { id: string; name: string; lat: number | null; lng: number | null };
 type SiteWithDistance = Site & { distanceKm?: number };
 
 export function SitePicker({ sites }: { sites: Site[] }) {

@@ -9,6 +9,13 @@ import {
   weekKey,
   type ReportSourceEntry,
 } from "./report";
+import { fromJstParts, jstMidnight } from "./jst-date";
+
+// テスト実行環境の実行タイムゾーンに関わらず結果が一定になるよう、日本時間として
+// 明示的に絶対時刻を組み立てる（本番相当のUTC実行環境でテストしても壊れないように）。
+function jstTime(year: number, month: number, day: number, hour = 0, minute = 0): Date {
+  return fromJstParts(year, month, day, hour, minute);
+}
 
 function makeEntry(overrides: Partial<ReportSourceEntry> = {}): ReportSourceEntry {
   return {
@@ -17,9 +24,9 @@ function makeEntry(overrides: Partial<ReportSourceEntry> = {}): ReportSourceEntr
     employeeName: "山田 太郎",
     siteId: "site-1",
     siteName: "新宿現場",
-    workDate: new Date(2026, 7, 3),
-    clockIn: new Date(2026, 7, 3, 7, 30),
-    clockOut: new Date(2026, 7, 3, 17, 30),
+    workDate: jstMidnight(2026, 8, 3),
+    clockIn: jstTime(2026, 8, 3, 7, 30),
+    clockOut: jstTime(2026, 8, 3, 17, 30),
     workedBreak1: false,
     workedBreak2: false,
     workedBreak3: false,
@@ -29,20 +36,20 @@ function makeEntry(overrides: Partial<ReportSourceEntry> = {}): ReportSourceEntr
 
 describe("dayKey / weekKey / monthKey", () => {
   it("dayKey formats as YYYY-MM-DD", () => {
-    expect(dayKey(new Date(2026, 7, 3))).toBe("2026-08-03");
+    expect(dayKey(jstMidnight(2026, 8, 3))).toBe("2026-08-03");
   });
 
   it("monthKey formats as YYYY-MM", () => {
-    expect(monthKey(new Date(2026, 7, 3))).toBe("2026-08");
+    expect(monthKey(jstMidnight(2026, 8, 3))).toBe("2026-08");
   });
 
   it("weekKey resolves to the Monday of that week", () => {
     // 2026-08-03 is a Monday
-    expect(weekKey(new Date(2026, 7, 3))).toBe("2026-08-03");
+    expect(weekKey(jstMidnight(2026, 8, 3))).toBe("2026-08-03");
     // 2026-08-09 is a Sunday, same week as the Monday above
-    expect(weekKey(new Date(2026, 7, 9))).toBe("2026-08-03");
+    expect(weekKey(jstMidnight(2026, 8, 9))).toBe("2026-08-03");
     // 2026-08-10 is the next Monday
-    expect(weekKey(new Date(2026, 7, 10))).toBe("2026-08-10");
+    expect(weekKey(jstMidnight(2026, 8, 10))).toBe("2026-08-10");
   });
 });
 
@@ -53,15 +60,15 @@ describe("summarizeByPeriod", () => {
       toReportEntry(
         makeEntry({
           id: "b",
-          workDate: new Date(2026, 7, 3),
-          clockIn: new Date(2026, 7, 3, 7, 30),
-          clockOut: new Date(2026, 7, 3, 12, 0),
+          workDate: jstMidnight(2026, 8, 3),
+          clockIn: jstTime(2026, 8, 3, 7, 30),
+          clockOut: jstTime(2026, 8, 3, 12, 0),
         }),
       ),
       toReportEntry(
         makeEntry({
           id: "c",
-          workDate: new Date(2026, 7, 4),
+          workDate: jstMidnight(2026, 8, 4),
         }),
       ),
     ];
@@ -70,8 +77,8 @@ describe("summarizeByPeriod", () => {
     expect(byDay).toHaveLength(2);
     expect(byDay[0].key).toBe("2026-08-03");
     expect(byDay[0].entryCount).toBe(2);
-    // a: 07:30-17:30 -> 8h worked -> 1.0ninku。b: 07:30-12:00 -> 4.5h span-2h休憩=2.5h -> 0.3125ninku
-    expect(byDay[0].totalNinku).toBeCloseTo(1.0 + 0.3125, 10);
+    // a: 07:30-17:30 -> 8h worked -> 1.0ninku。b: 07:30-12:00 -> 4.5h span-2h休憩=2.5h -> 0.3125を丸めて0.31ninku
+    expect(byDay[0].totalNinku).toBeCloseTo(1.0 + 0.31, 10);
     expect(byDay[1].key).toBe("2026-08-04");
   });
 });
@@ -84,8 +91,8 @@ describe("summarizeByEmployee", () => {
         makeEntry({
           employeeId: "emp-2",
           employeeName: "佐藤 次郎",
-          clockIn: new Date(2026, 7, 3, 7, 30),
-          clockOut: new Date(2026, 7, 3, 9, 30),
+          clockIn: jstTime(2026, 8, 3, 7, 30),
+          clockOut: jstTime(2026, 8, 3, 9, 30),
         }),
       ),
     ];

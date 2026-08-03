@@ -74,8 +74,8 @@ const TIME_ENTRY_SCHEMA: BqField[] = [
 const SITE_SCHEMA: BqField[] = [
   { name: "site_id", type: "STRING", mode: "REQUIRED" },
   { name: "name", type: "STRING", mode: "REQUIRED" },
-  { name: "lat", type: "FLOAT", mode: "REQUIRED" },
-  { name: "lng", type: "FLOAT", mode: "REQUIRED" },
+  { name: "lat", type: "FLOAT", mode: "NULLABLE" },
+  { name: "lng", type: "FLOAT", mode: "NULLABLE" },
   { name: "is_active", type: "BOOLEAN", mode: "REQUIRED" },
   { name: "created_at", type: "TIMESTAMP", mode: "REQUIRED" },
   { name: "synced_at", type: "TIMESTAMP", mode: "REQUIRED" },
