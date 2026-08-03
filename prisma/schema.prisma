@@ -1,0 +1,84 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Employee {
+  id           String        @id @default(cuid())
+  name         String
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  timeEntries  TimeEntry[]
+  allowedEmail AllowedEmail?
+}
+
+// Googleアカウントのホワイトリスト。ログイン時にこのテーブルにあるメールアドレスかどうかで
+// 認可し、employeeIdで「誰の打刻か」を一意に識別する。employeeIdがnullの行は
+// 打刻対象ではない管理者専用アカウント（現場に出ない管理者など）を表す。
+model AllowedEmail {
+  id         String    @id @default(cuid())
+  email      String    @unique
+  isAdmin    Boolean   @default(false)
+  employeeId String?   @unique
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Site {
+  id          String      @id @default(cuid())
+  name        String
+  lat         Float
+  lng         Float
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  timeEntries TimeEntry[]
+}
+
+model TimeEntry {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id])
+
+  // その日の稼働日。集計クエリで clockIn/clockOut の時刻から日付を導出しなくて済むように分離して持つ。
+  workDate DateTime
+
+  clockIn  DateTime?
+  clockOut DateTime?
+
+  // 補正前の元の打刻を保持（監査用）。手動補正の直前の値のみ保存する。
+  originalClockIn    DateTime?
+  originalClockOut   DateTime?
+  isManuallyAdjusted Boolean   @default(false)
+  adjustmentNote     String?
+  adjustedAt         DateTime?
+  adjustedByName     String? // 補正した本人のメールアドレス（セッションから記録、監査用）
+
+  // 定時休憩（10:00-10:30 / 12:00-13:00 / 15:00-15:30）を休憩なしで稼働した場合にチェックする。
+  // trueの休憩枠は稼働時間・人工の計算に含める（lib/ninku.ts の BREAK_WINDOWS と対応）。
+  workedBreak1 Boolean @default(false)
+  workedBreak2 Boolean @default(false)
+  workedBreak3 Boolean @default(false)
+
+  // その日その現場での作業内容メモ（任意）。管理者画面の打刻詳細でそのまま表示する。
+  dailyReport String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId, workDate])
+  @@index([siteId, workDate])
+}
