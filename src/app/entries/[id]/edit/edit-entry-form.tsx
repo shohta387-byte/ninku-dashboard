@@ -3,17 +3,23 @@
 import { useActionState } from "react";
 import { adjustTimeEntryForm, type AdjustEntryState } from "@/app/actions";
 
+type Site = { id: string; name: string };
+
 const initialState: AdjustEntryState = { status: "idle", message: "" };
 
 export function EditEntryForm({
   entryId,
   options,
+  sites,
+  defaultSiteId,
   defaultClockIn,
   defaultClockOut,
   defaultDailyReport,
 }: {
   entryId: string;
   options: string[];
+  sites: Site[];
+  defaultSiteId: string;
   defaultClockIn: string;
   defaultClockOut: string;
   defaultDailyReport: string;
@@ -23,6 +29,20 @@ export function EditEntryForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
+      <label className="flex flex-col gap-1">
+        <span className="text-sm text-zinc-500">現場</span>
+        <select
+          name="siteId"
+          defaultValue={defaultSiteId}
+          className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
+        >
+          {sites.map((site) => (
+            <option key={site.id} value={site.id}>
+              {site.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="flex flex-col gap-1">
         <span className="text-sm text-zinc-500">出勤時刻</span>
         <select

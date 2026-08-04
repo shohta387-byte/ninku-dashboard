@@ -44,11 +44,22 @@ function eligibleBreakKeys(date: string, clockInTime: string, clockOutTime: stri
 const TIME_OPTIONS = generateTimeOptions();
 const initialState: ManualEntryState = { status: "idle", message: "" };
 
-export function ManualEntryForm({ sites }: { sites: Site[] }) {
+export function ManualEntryForm({
+  sites,
+  prefill,
+}: {
+  sites: Site[];
+  prefill?: { date: string; clockInTime: string };
+}) {
   const [state, formAction, isPending] = useActionState(createManualTimeEntry, initialState);
   const nextKeyRef = useRef(1);
   const [blocks, setBlocks] = useState<Block[]>([
-    { key: 0, date: todayInputValue(), clockInTime: "07:30", clockOutTime: "17:30" },
+    {
+      key: 0,
+      date: prefill?.date ?? todayInputValue(),
+      clockInTime: prefill?.clockInTime ?? "07:30",
+      clockOutTime: "17:30",
+    },
   ]);
 
   function updateBlock(key: number, patch: Partial<Block>) {

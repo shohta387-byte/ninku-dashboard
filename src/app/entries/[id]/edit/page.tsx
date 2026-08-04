@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTimeEntryById } from "@/app/actions";
+import { getSiteById, getSites, getTimeEntryById } from "@/app/actions";
 import { roundToTimeStep } from "@/lib/ninku";
 import { toJstParts } from "@/lib/jst-date";
 import { EditEntryForm } from "./edit-entry-form";
@@ -27,7 +27,7 @@ export default async function EditEntryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const entry = await getTimeEntryById(id);
+  const [entry, sites] = await Promise.all([getTimeEntryById(id), getSites()]);
   if (!entry) {
     notFound();
   }
@@ -35,6 +35,14 @@ export default async function EditEntryPage({
   const options = generateTimeOptions();
   const defaultClockIn = entry.clockIn ? formatTimeStep(entry.clockIn) : "07:30";
   const defaultClockOut = entry.clockOut ? formatTimeStep(entry.clockOut) : "17:30";
+  // 現在の現場が非アクティブ化されている等で候補に無い場合も選べるよう先頭に足しておく
+  let siteOptions = sites;
+  if (!sites.some((s) => s.id === entry.siteId)) {
+    const currentSite = await getSiteById(entry.siteId);
+    if (currentSite) {
+      siteOptions = [currentSite, ...sites];
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
@@ -45,6 +53,8 @@ export default async function EditEntryPage({
       <EditEntryForm
         entryId={id}
         options={options}
+        sites={siteOptions}
+        defaultSiteId={entry.siteId}
         defaultClockIn={defaultClockIn}
         defaultClockOut={defaultClockOut}
         defaultDailyReport={entry.dailyReport ?? ""}

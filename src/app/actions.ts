@@ -444,6 +444,78 @@ export async function clockOut(
   return { status: "idle", message: "" };
 }
 
+export interface MoveToNextSiteState {
+  status: "idle" | "error";
+  message: string;
+}
+
+// 現在稼働中の現場を退勤すると同時に、選んだ次の現場の出勤を同じ時刻で作成する。
+// 従来の「退勤→現場選択→出勤」という2アクションを1操作にまとめ、片方だけ押し忘れて
+// 次の現場の打刻が丸ごと抜ける事故を防ぐ。移動時間は「次の現場での稼働時間」とみなす
+// 仕様のため、退勤・出勤には必ず同じ時刻(now)を使う。
+export async function moveToNextSite(
+  entryId: string,
+  _prevState: MoveToNextSiteState,
+  formData: FormData,
+): Promise<MoveToNextSiteState> {
+  const { employeeId } = await requireEmployeeSession();
+
+  const nextSiteId = formData.get("nextSiteId");
+  if (typeof nextSiteId !== "string" || nextSiteId === "") {
+    return { status: "error", message: "次の現場を選択してください" };
+  }
+
+  const existing = await prisma.timeEntry.findUniqueOrThrow({ where: { id: entryId } });
+  if (existing.employeeId !== employeeId) {
+    return { status: "error", message: "この打刻を操作する権限がありません" };
+  }
+  if (!existing.clockIn || existing.clockOut) {
+    return { status: "error", message: "退勤していない打刻が見つかりません" };
+  }
+
+  const nextSite = await prisma.site.findUnique({ where: { id: nextSiteId } });
+  if (!nextSite) {
+    return { status: "error", message: "現場が見つかりません" };
+  }
+  if (nextSiteId === existing.siteId) {
+    return { status: "error", message: "現在と同じ現場が選択されています。違う現場を選ぶか、通常の「退勤」を使ってください" };
+  }
+
+  const now = new Date();
+  const validKeys = new Set(
+    getBreakWindowsWithinSpan(existing.workDate, existing.clockIn, now).map((w) => w.key),
+  );
+  const checked = checkedBreakKeysFromFormData(formData);
+  const effectiveChecked = new Set([...checked].filter((k) => validKeys.has(k)));
+  const dailyReport = formData.get("dailyReport");
+
+  await prisma.$transaction([
+    prisma.timeEntry.update({
+      where: { id: entryId },
+      data: {
+        clockOut: now,
+        originalClockOut: now,
+        ...workedBreakFields(effectiveChecked),
+        dailyReport: typeof dailyReport === "string" && dailyReport.trim() !== "" ? dailyReport.trim() : null,
+      },
+    }),
+    prisma.timeEntry.create({
+      data: {
+        employeeId,
+        siteId: nextSiteId,
+        workDate: startOfToday(),
+        clockIn: now,
+        originalClockIn: now,
+      },
+    }),
+  ]);
+
+  revalidatePath("/clock");
+  revalidatePath("/entries");
+  triggerBigQuerySyncInBackground();
+  redirect(`/clock?siteId=${nextSiteId}`);
+}
+
 function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
   return aStart < bEnd && bStart < aEnd;
 }
@@ -612,6 +684,7 @@ export async function adjustTimeEntry(
   entryId: string,
   newClockIn: Date,
   newClockOut: Date,
+  newSiteId?: string,
   note?: string,
   dailyReport?: string,
 ): Promise<AdjustTimeEntryResult> {
@@ -639,25 +712,52 @@ export async function adjustTimeEntry(
     }
   }
 
-  const entry = await prisma.timeEntry.update({
-    where: { id: entryId },
-    data: {
-      clockIn: newClockIn,
-      clockOut: newClockOut,
-      isManuallyAdjusted: true,
-      adjustedAt: new Date(),
-      adjustmentNote: note,
-      adjustedByName: session.email,
-      dailyReport: dailyReport ?? null,
-      // 初回の補正時のみ、補正前の元の打刻を退避する（監査用）
-      ...(existing.isManuallyAdjusted
-        ? {}
-        : { originalClockIn: existing.clockIn, originalClockOut: existing.clockOut }),
-    },
-  });
+  const resolvedSiteId = newSiteId && newSiteId !== "" ? newSiteId : existing.siteId;
+  if (resolvedSiteId !== existing.siteId) {
+    const site = await prisma.site.findUnique({ where: { id: resolvedSiteId } });
+    if (!site) {
+      return { ok: false, message: "現場が見つかりません" };
+    }
+  }
+
+  const now = new Date();
+  const [entry] = await prisma.$transaction([
+    prisma.timeEntry.update({
+      where: { id: entryId },
+      data: {
+        clockIn: newClockIn,
+        clockOut: newClockOut,
+        siteId: resolvedSiteId,
+        isManuallyAdjusted: true,
+        adjustedAt: now,
+        adjustmentNote: note,
+        adjustedByName: session.email,
+        dailyReport: dailyReport ?? null,
+        // 初回の補正時のみ、補正前の元の打刻を退避する（監査用）
+        ...(existing.isManuallyAdjusted
+          ? {}
+          : { originalClockIn: existing.clockIn, originalClockOut: existing.clockOut }),
+      },
+    }),
+    prisma.timeEntryAdjustmentLog.create({
+      data: {
+        timeEntryId: entryId,
+        adjustedByEmail: session.email,
+        reason: note ?? null,
+        beforeClockIn: existing.clockIn,
+        afterClockIn: newClockIn,
+        beforeClockOut: existing.clockOut,
+        afterClockOut: newClockOut,
+        beforeSiteId: existing.siteId,
+        afterSiteId: resolvedSiteId,
+      },
+    }),
+  ]);
 
   revalidatePath("/clock");
+  revalidatePath("/entries");
   revalidatePath(`/entries/${entryId}/edit`);
+  revalidatePath(`/admin/entries/${entryId}`);
   triggerBigQuerySyncInBackground();
   return { ok: true, entry };
 }
@@ -682,6 +782,7 @@ export async function adjustTimeEntryForm(
 ): Promise<AdjustEntryState> {
   const clockInTime = formData.get("clockInTime");
   const clockOutTime = formData.get("clockOutTime");
+  const siteId = formData.get("siteId");
   const note = formData.get("note");
   const dailyReport = formData.get("dailyReport");
 
@@ -697,6 +798,7 @@ export async function adjustTimeEntryForm(
     entryId,
     newClockIn,
     newClockOut,
+    typeof siteId === "string" && siteId !== "" ? siteId : undefined,
     typeof note === "string" && note.length > 0 ? note : undefined,
     typeof dailyReport === "string" && dailyReport.trim() !== "" ? dailyReport.trim() : undefined,
   );
@@ -705,7 +807,194 @@ export async function adjustTimeEntryForm(
     return { status: "error", message: result.message };
   }
 
-  redirect(`/clock?siteId=${existing.siteId}`);
+  redirect(`/clock?siteId=${result.entry.siteId}`);
+}
+
+// --- 現場の切り替わり（ペア）修正 ---
+
+// ペア修正の対象2件を取得する。本人の打刻同士、または管理者なら誰の打刻でも取得できる。
+export async function getEntryPairForCorrection(entryAId: string, entryBId: string) {
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+
+  const [entryA, entryB] = await Promise.all([
+    prisma.timeEntry.findUnique({ where: { id: entryAId }, include: { site: true } }),
+    prisma.timeEntry.findUnique({ where: { id: entryBId }, include: { site: true } }),
+  ]);
+  if (!entryA || !entryB) return null;
+
+  if (!session.isAdmin && (entryA.employeeId !== session.employeeId || entryB.employeeId !== session.employeeId)) {
+    throw new Error("この打刻を修正する権限がありません");
+  }
+
+  return { entryA, entryB };
+}
+
+export interface AdjustPairState {
+  status: "idle" | "error";
+  message: string;
+}
+
+// 「A現場の退勤時刻」と「B現場の出勤時刻」をセットで直す。通常は移動時間を含めて同じ時刻に
+// 揃える運用だが、実際に時間差があった場合のために個別の時刻も指定できる。
+export async function adjustEntryPair(
+  entryAId: string,
+  entryBId: string,
+  _prevState: AdjustPairState,
+  formData: FormData,
+): Promise<AdjustPairState> {
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+
+  const clockOutATime = formData.get("clockOutATime");
+  const clockInBTime = formData.get("clockInBTime");
+  const reason = formData.get("reason");
+  const returnTo = formData.get("returnTo");
+
+  if (typeof clockOutATime !== "string" || typeof clockInBTime !== "string") {
+    return { status: "error", message: "時刻を選択してください" };
+  }
+
+  const [entryA, entryB] = await Promise.all([
+    prisma.timeEntry.findUniqueOrThrow({ where: { id: entryAId } }),
+    prisma.timeEntry.findUniqueOrThrow({ where: { id: entryBId } }),
+  ]);
+
+  for (const entry of [entryA, entryB]) {
+    if (entry.employeeId !== session.employeeId && !session.isAdmin) {
+      return { status: "error", message: "この打刻を修正する権限がありません" };
+    }
+  }
+
+  if (!session.isAdmin) {
+    const { from, to } = currentBillingPeriod();
+    for (const entry of [entryA, entryB]) {
+      if (entry.workDate < from || entry.workDate > to) {
+        return { status: "error", message: "今の締め期間（21日〜20日）より前の打刻は修正できません" };
+      }
+    }
+  }
+
+  if (!entryA.clockIn) {
+    return { status: "error", message: "A現場の出勤時刻が確定していません" };
+  }
+
+  const newClockOutA = combineDateAndTime(entryA.workDate, clockOutATime);
+  const newClockInB = combineDateAndTime(entryB.workDate, clockInBTime);
+
+  if (newClockOutA <= entryA.clockIn) {
+    return { status: "error", message: "A現場の退勤時刻は出勤時刻より後にしてください" };
+  }
+  if (entryB.clockOut && newClockInB >= entryB.clockOut) {
+    return { status: "error", message: "B現場の出勤時刻は退勤時刻より前にしてください" };
+  }
+  if (newClockOutA > newClockInB) {
+    return { status: "error", message: "A現場の退勤時刻はB現場の出勤時刻より後にはできません" };
+  }
+
+  const reasonValue = typeof reason === "string" && reason.trim() !== "" ? reason.trim() : null;
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.timeEntry.update({
+      where: { id: entryAId },
+      data: {
+        clockOut: newClockOutA,
+        isManuallyAdjusted: true,
+        adjustedAt: now,
+        adjustmentNote: reasonValue ?? "現場切り替えのペア修正",
+        adjustedByName: session.email,
+        ...(entryA.isManuallyAdjusted
+          ? {}
+          : { originalClockIn: entryA.clockIn, originalClockOut: entryA.clockOut }),
+      },
+    });
+    await tx.timeEntry.update({
+      where: { id: entryBId },
+      data: {
+        clockIn: newClockInB,
+        isManuallyAdjusted: true,
+        adjustedAt: now,
+        adjustmentNote: reasonValue ?? "現場切り替えのペア修正",
+        adjustedByName: session.email,
+        ...(entryB.isManuallyAdjusted
+          ? {}
+          : { originalClockIn: entryB.clockIn, originalClockOut: entryB.clockOut }),
+      },
+    });
+
+    const logA = await tx.timeEntryAdjustmentLog.create({
+      data: {
+        timeEntryId: entryAId,
+        adjustedByEmail: session.email,
+        reason: reasonValue,
+        beforeClockOut: entryA.clockOut,
+        afterClockOut: newClockOutA,
+      },
+    });
+    const logB = await tx.timeEntryAdjustmentLog.create({
+      data: {
+        timeEntryId: entryBId,
+        adjustedByEmail: session.email,
+        reason: reasonValue,
+        beforeClockIn: entryB.clockIn,
+        afterClockIn: newClockInB,
+        pairedLogId: logA.id,
+      },
+    });
+    await tx.timeEntryAdjustmentLog.update({ where: { id: logA.id }, data: { pairedLogId: logB.id } });
+  });
+
+  revalidatePath("/clock");
+  revalidatePath("/entries");
+  revalidatePath(`/admin/entries/${entryAId}`);
+  revalidatePath(`/admin/entries/${entryBId}`);
+  triggerBigQuerySyncInBackground();
+  redirect(typeof returnTo === "string" && returnTo !== "" ? returnTo : "/entries");
+}
+
+// --- 修正の監査ログ ---
+
+// 打刻詳細ページ用。その打刻に対する全ての修正履歴を新しい順で返す。
+export async function getAdjustmentLogsForEntry(entryId: string) {
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+  const entry = await prisma.timeEntry.findUnique({ where: { id: entryId } });
+  if (!entry) return [];
+  if (entry.employeeId !== session.employeeId && !session.isAdmin) {
+    throw new Error("この打刻の修正履歴を閲覧する権限がありません");
+  }
+  return prisma.timeEntryAdjustmentLog.findMany({
+    where: { timeEntryId: entryId },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export interface AdjustmentLogFilters {
+  employeeId?: string;
+  from: string; // "YYYY-MM-DD"（対象打刻のworkDateで絞り込む）
+  to: string; // "YYYY-MM-DD"
+}
+
+// 管理画面の「修正履歴」一覧ページ用。対象打刻の勤務日(workDate)・従業員で絞り込む。
+export async function getAdjustmentLogs(filters: AdjustmentLogFilters) {
+  await requireAdminSession();
+  return prisma.timeEntryAdjustmentLog.findMany({
+    where: {
+      timeEntry: {
+        workDate: { gte: startOfDateString(filters.from), lte: startOfDateString(filters.to) },
+        ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
+      },
+    },
+    include: { timeEntry: { include: { employee: true, site: true } } },
+    orderBy: { createdAt: "desc" },
+  });
 }
 
 // 管理者画面の打刻詳細ページ用。日報や補正履歴まで含めた全情報を返す。
@@ -736,6 +1025,16 @@ export async function getEntryDetail(entryId: string) {
       : null;
 
   return { entry, ninku };
+}
+
+// 管理者画面の打刻詳細ページ用。ペア修正の入口を出すため、同じ従業員・同じ日の
+// 他の打刻（隣接判定に使う）を合わせて返す。
+export async function getEntriesForEmployeeDay(employeeId: string, workDate: Date) {
+  await requireAdminSession();
+  return prisma.timeEntry.findMany({
+    where: { employeeId, workDate },
+    orderBy: { clockIn: "asc" },
+  });
 }
 
 export async function getTimeEntryById(entryId: string) {

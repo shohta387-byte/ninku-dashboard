@@ -83,6 +83,33 @@ model TimeEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  adjustmentLogs TimeEntryAdjustmentLog[]
+
   @@index([employeeId, workDate])
   @@index([siteId, workDate])
+}
+
+// 手動修正（個別修正・ペア修正）の監査ログ。TimeEntry側のadjustedAt等は「直近1回分」しか
+// 保持しないため、修正のたびに追記していく専用テーブルとして分離する。
+// ペア修正（現場の切り替わり=A現場の退勤とB現場の出勤をまとめて直す操作）の場合は、
+// 対になるもう片方のログをpairedLogIdで指し、2件セットの修正だったことを追跡できるようにする。
+model TimeEntryAdjustmentLog {
+  id              String    @id @default(cuid())
+  timeEntryId     String
+  timeEntry       TimeEntry @relation(fields: [timeEntryId], references: [id])
+  adjustedByEmail String
+  reason          String?
+  pairedLogId     String?
+
+  beforeClockIn  DateTime?
+  afterClockIn   DateTime?
+  beforeClockOut DateTime?
+  afterClockOut  DateTime?
+  beforeSiteId   String?
+  afterSiteId    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([timeEntryId])
+  @@index([createdAt])
 }

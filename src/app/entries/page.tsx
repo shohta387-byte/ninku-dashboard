@@ -9,6 +9,7 @@ import {
   type BreakKey,
 } from "@/lib/ninku";
 import { currentBillingPeriod, formatJstDate, formatJstTime, toJstInputValue } from "@/lib/jst-date";
+import { findAdjacentEntryPairs } from "@/lib/entry-pairs";
 import { DeleteEntryButton } from "./delete-entry-button";
 
 export default async function EntriesListPage() {
@@ -18,6 +19,12 @@ export default async function EntriesListPage() {
     getMyEntriesForCurrentPeriod(),
   ]);
   const { from, to } = currentBillingPeriod();
+
+  // 一覧は新しい順(workDate desc, clockIn desc)なので、隣接ペアの「後(b)」は先に、
+  // 「前(a)」は後に描画される。bのカードの直後にペア修正リンクを挟み込む。
+  const nextIdByLaterId = new Map(
+    findAdjacentEntryPairs(entries).map((pair) => [pair.b.id, pair.a.id]),
+  );
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
@@ -33,9 +40,22 @@ export default async function EntriesListPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        {entries.map((entry) => (
-          <EntryCard key={entry.id} entry={entry} siteName={entry.site.name} />
-        ))}
+        {entries.map((entry) => {
+          const earlierPairId = nextIdByLaterId.get(entry.id);
+          return (
+            <div key={entry.id} className="flex flex-col gap-3">
+              <EntryCard entry={entry} siteName={entry.site.name} />
+              {earlierPairId && (
+                <Link
+                  href={`/entries/pair/${earlierPairId}/${entry.id}?returnTo=/entries`}
+                  className="text-center text-sm text-blue-600 underline"
+                >
+                  ↕ 現場の切り替え時刻を修正する
+                </Link>
+              )}
+            </div>
+          );
+        })}
         {entries.length === 0 && (
           <p className="text-zinc-500">この期間の打刻はまだありません。</p>
         )}
@@ -105,6 +125,11 @@ function EntryCard({
         </Link>
         <DeleteEntryButton entryId={entry.id} />
       </div>
+      {isComplete && (
+        <Link href={`/entries/manual?fromEntryId=${entry.id}`} className="text-sm text-blue-600 underline">
+          この後の現場を追加する
+        </Link>
+      )}
     </div>
   );
 }

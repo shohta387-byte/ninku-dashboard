@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getEntryDetail } from "@/app/actions";
+import {
+  getAdjustmentLogsForEntry,
+  getEntriesForEmployeeDay,
+  getEntryDetail,
+  getSitesForAdmin,
+} from "@/app/actions";
 import { BREAK_WINDOWS, getWorkedBreakKeysFromEntry } from "@/lib/ninku";
 import { formatJstDate, formatJstDateTime } from "@/lib/jst-date";
+import { findNeighbors } from "@/lib/entry-pairs";
 
 function formatDateTime(date: Date | null): string {
   if (!date) return "—";
@@ -32,6 +38,14 @@ export default async function AdminEntryDetailPage({
 
   const { entry, ninku } = detail;
   const workedBreakKeys = getWorkedBreakKeysFromEntry(entry);
+
+  const [dayEntries, logs, sites] = await Promise.all([
+    getEntriesForEmployeeDay(entry.employeeId, entry.workDate),
+    getAdjustmentLogsForEntry(id),
+    getSitesForAdmin(),
+  ]);
+  const siteNameById = new Map(sites.map((s) => [s.id, s.name]));
+  const { prev, next } = findNeighbors(dayEntries, id);
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -85,7 +99,7 @@ export default async function AdminEntryDetailPage({
 
       {entry.isManuallyAdjusted && (
         <section className="flex flex-col gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-5 text-sm dark:border-yellow-800 dark:bg-yellow-950">
-          <h3 className="font-bold text-yellow-800 dark:text-yellow-200">補正履歴</h3>
+          <h3 className="font-bold text-yellow-800 dark:text-yellow-200">補正履歴（最新）</h3>
           {entry.originalClockIn && entry.originalClockOut && (
             <p>
               補正前: {formatDateTime(entry.originalClockIn)} 〜{" "}
@@ -95,6 +109,62 @@ export default async function AdminEntryDetailPage({
           {entry.adjustmentNote && <p>理由: {entry.adjustmentNote}</p>}
           {entry.adjustedByName && <p>補正者: {entry.adjustedByName}</p>}
           {entry.adjustedAt && <p>補正日時: {formatDateTime(entry.adjustedAt)}</p>}
+        </section>
+      )}
+
+      {(prev || next) && (
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-bold text-zinc-500">現場の切り替わりを修正</h3>
+          <div className="flex flex-col gap-2 text-sm">
+            {prev && (
+              <Link
+                href={`/entries/pair/${prev.id}/${entry.id}?returnTo=/admin/entries/${entry.id}`}
+                className="text-blue-600 underline"
+              >
+                前の現場との切り替え時刻をまとめて修正する
+              </Link>
+            )}
+            {next && (
+              <Link
+                href={`/entries/pair/${entry.id}/${next.id}?returnTo=/admin/entries/${entry.id}`}
+                className="text-blue-600 underline"
+              >
+                次の現場との切り替え時刻をまとめて修正する
+              </Link>
+            )}
+          </div>
+        </section>
+      )}
+
+      {logs.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-bold text-zinc-500">修正履歴一覧（全{logs.length}件）</h3>
+          <div className="flex flex-col gap-2">
+            {logs.map((log) => (
+              <div
+                key={log.id}
+                className="flex flex-col gap-1 rounded-lg border border-black/10 bg-white p-4 text-sm dark:border-white/10 dark:bg-zinc-900"
+              >
+                <div className="flex items-center justify-between text-zinc-500">
+                  <span>{formatDateTime(log.createdAt)}</span>
+                  <span>{log.adjustedByEmail}</span>
+                </div>
+                {log.beforeClockIn && log.afterClockIn && log.beforeClockIn.getTime() !== log.afterClockIn.getTime() && (
+                  <p>出勤: {formatDateTime(log.beforeClockIn)} → {formatDateTime(log.afterClockIn)}</p>
+                )}
+                {log.beforeClockOut && log.afterClockOut && log.beforeClockOut.getTime() !== log.afterClockOut.getTime() && (
+                  <p>退勤: {formatDateTime(log.beforeClockOut)} → {formatDateTime(log.afterClockOut)}</p>
+                )}
+                {log.beforeSiteId && log.afterSiteId && log.beforeSiteId !== log.afterSiteId && (
+                  <p>
+                    現場: {siteNameById.get(log.beforeSiteId) ?? log.beforeSiteId} → {siteNameById.get(log.afterSiteId) ?? log.afterSiteId}
+                  </p>
+                )}
+                {log.reason && <p className="text-zinc-500">理由: {log.reason}</p>}
+                {log.pairedLogId && <p className="text-xs text-zinc-400">現場切り替えのペア修正の一部</p>}
+              </div>
+            ))}
+          </div>
         </section>
       )}
     </div>

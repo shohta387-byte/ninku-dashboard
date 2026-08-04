@@ -60,6 +60,15 @@ export default async function ClockPage({
         <div className="flex flex-col gap-4">
           <p className="text-lg">出勤: {formatTime(openEntry.clockIn!)}</p>
           <ClockOutForm entryId={openEntry.id} eligibleBreaks={eligibleBreaks} />
+          <Link
+            href={`/clock/next-site?entryId=${openEntry.id}`}
+            className="w-full rounded-lg border border-black/10 px-5 py-4 text-center text-lg font-bold shadow-sm active:bg-zinc-100 dark:border-white/10 dark:active:bg-zinc-800"
+          >
+            次の現場へ移動する
+          </Link>
+          <p className="-mt-2 text-xs text-zinc-500">
+            続けて別の現場で作業する場合はこちら。今の現場の退勤と、次の現場の出勤が同じ時刻でまとめて記録されます。
+          </p>
         </div>
       )}
 
