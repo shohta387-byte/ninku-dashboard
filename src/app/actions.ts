@@ -454,86 +454,154 @@ export interface ManualEntryState {
   message: string;
 }
 
+// 打刻を後から手動で追加するフォームは、「+現場を追加」で複数の現場・時間帯を
+// まとめて1回の送信で登録できる。各ブロックのフィールドは name="siteId-0", "siteId-1"...
+// のようにインデックス付きで送られてくるため、ここでブロック単位に組み立て直す。
+interface ManualEntryBlockInput {
+  index: number;
+  siteId: string;
+  workDate: Date;
+  clockIn: Date;
+  clockOut: Date;
+  checked: Set<BreakKey>;
+  note: string | null;
+  dailyReport: string | null;
+}
+
 export async function createManualTimeEntry(
   _prevState: ManualEntryState,
   formData: FormData,
 ): Promise<ManualEntryState> {
   const { employeeId } = await requireEmployeeSession();
 
-  const siteId = formData.get("siteId");
-  const dateStr = formData.get("date");
-  const clockInTime = formData.get("clockInTime");
-  const clockOutTime = formData.get("clockOutTime");
-  const note = formData.get("note");
+  const indices = [...new Set(
+    [...formData.keys()]
+      .map((key) => key.match(/^siteId-(\d+)$/)?.[1])
+      .filter((v): v is string => v !== undefined)
+      .map(Number),
+  )].sort((a, b) => a - b);
 
-  if (typeof siteId !== "string" || siteId === "") {
+  if (indices.length === 0) {
     return { status: "error", message: "現場を選択してください" };
   }
-  if (typeof dateStr !== "string" || dateStr === "") {
-    return { status: "error", message: "日付を選択してください" };
-  }
-  if (typeof clockInTime !== "string" || typeof clockOutTime !== "string") {
-    return { status: "error", message: "時刻を選択してください" };
+
+  const blocks: ManualEntryBlockInput[] = [];
+  for (const i of indices) {
+    const label = indices.length > 1 ? `${i + 1}件目: ` : "";
+    const siteId = formData.get(`siteId-${i}`);
+    const dateStr = formData.get(`date-${i}`);
+    const clockInTime = formData.get(`clockInTime-${i}`);
+    const clockOutTime = formData.get(`clockOutTime-${i}`);
+
+    if (typeof siteId !== "string" || siteId === "") {
+      return { status: "error", message: `${label}現場を選択してください` };
+    }
+    if (typeof dateStr !== "string" || dateStr === "") {
+      return { status: "error", message: `${label}日付を選択してください` };
+    }
+    if (typeof clockInTime !== "string" || typeof clockOutTime !== "string") {
+      return { status: "error", message: `${label}時刻を選択してください` };
+    }
+
+    const workDate = startOfDateString(dateStr);
+    if (workDate.getTime() > startOfToday().getTime()) {
+      return { status: "error", message: `${label}未来の日付は追加できません` };
+    }
+
+    const clockIn = combineDateAndTime(workDate, clockInTime);
+    const clockOut = combineDateAndTime(workDate, clockOutTime);
+    if (clockOut <= clockIn) {
+      return { status: "error", message: `${label}退勤時刻は出勤時刻より後にしてください` };
+    }
+
+    const note = formData.get(`note-${i}`);
+    const dailyReport = formData.get(`dailyReport-${i}`);
+    const checked = new Set<BreakKey>(
+      BREAK_WINDOWS.map((w) => w.key).filter((key) => formData.get(`${key}-${i}`) != null),
+    );
+
+    blocks.push({
+      index: i,
+      siteId,
+      workDate,
+      clockIn,
+      clockOut,
+      checked,
+      note: typeof note === "string" && note.trim() !== "" ? note.trim() : null,
+      dailyReport: typeof dailyReport === "string" && dailyReport.trim() !== "" ? dailyReport.trim() : null,
+    });
   }
 
-  const workDate = startOfDateString(dateStr);
-  if (workDate.getTime() > startOfToday().getTime()) {
-    return { status: "error", message: "未来の日付は追加できません" };
+  const multi = blocks.length > 1;
+  const labelFor = (i: number) => (multi ? `${i + 1}件目: ` : "");
+
+  const sites = await prisma.site.findMany({ where: { id: { in: [...new Set(blocks.map((b) => b.siteId))] } } });
+  const siteMap = new Map(sites.map((s) => [s.id, s]));
+  for (const b of blocks) {
+    if (!siteMap.has(b.siteId)) {
+      return { status: "error", message: `${labelFor(b.index)}現場が見つかりません` };
+    }
   }
 
-  const newClockIn = combineDateAndTime(workDate, clockInTime);
-  const newClockOut = combineDateAndTime(workDate, clockOutTime);
-
-  if (newClockOut <= newClockIn) {
-    return { status: "error", message: "退勤時刻は出勤時刻より後にしてください" };
-  }
-
-  const site = await prisma.site.findUnique({ where: { id: siteId } });
-  if (!site) {
-    return { status: "error", message: "現場が見つかりません" };
-  }
-
-  // 同じ日の既存の打刻と時間帯が重なっていないか確認する（同時に2現場では働けないため）。
-  const sameDayEntries = await prisma.timeEntry.findMany({
-    where: { employeeId, workDate },
+  // 同じ日の既存の打刻、および今回まとめて追加しようとしているブロック同士で
+  // 時間帯が重なっていないか確認する（同時に2現場では働けないため）。
+  const workDates = [...new Set(blocks.map((b) => b.workDate.getTime()))].map((t) => new Date(t));
+  const existingEntries = await prisma.timeEntry.findMany({
+    where: { employeeId, workDate: { in: workDates } },
   });
-  const overlapping = sameDayEntries.some((e) => {
-    if (!e.clockIn) return false;
-    const existingEnd = e.clockOut ?? new Date(8640000000000000); // 退勤していない場合は無期限とみなす
-    return rangesOverlap(newClockIn, newClockOut, e.clockIn, existingEnd);
-  });
-  if (overlapping) {
-    return { status: "error", message: "同じ日の他の打刻と時間帯が重なっています" };
-  }
 
-  const validKeys = new Set(
-    getBreakWindowsWithinSpan(workDate, newClockIn, newClockOut).map((w) => w.key),
-  );
-  const checked = checkedBreakKeysFromFormData(formData);
-  const effectiveChecked = new Set([...checked].filter((k) => validKeys.has(k)));
-  const dailyReport = formData.get("dailyReport");
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    const overlapsExisting = existingEntries.some((e) => {
+      if (e.workDate.getTime() !== b.workDate.getTime() || !e.clockIn) return false;
+      const existingEnd = e.clockOut ?? new Date(8640000000000000); // 退勤していない場合は無期限とみなす
+      return rangesOverlap(b.clockIn, b.clockOut, e.clockIn, existingEnd);
+    });
+    if (overlapsExisting) {
+      return { status: "error", message: `${labelFor(b.index)}同じ日の他の打刻と時間帯が重なっています` };
+    }
+    for (let j = 0; j < i; j++) {
+      const other = blocks[j];
+      if (
+        other.workDate.getTime() === b.workDate.getTime() &&
+        rangesOverlap(b.clockIn, b.clockOut, other.clockIn, other.clockOut)
+      ) {
+        return {
+          status: "error",
+          message: `${labelFor(b.index)}${labelFor(other.index)}打刻と時間帯が重なっています`,
+        };
+      }
+    }
+  }
 
   const session = await getSession();
 
-  await prisma.timeEntry.create({
-    data: {
-      employeeId,
-      siteId,
-      workDate,
-      clockIn: newClockIn,
-      clockOut: newClockOut,
-      isManuallyAdjusted: true,
-      adjustedAt: new Date(),
-      adjustmentNote: typeof note === "string" && note.length > 0 ? note : "手動追加",
-      adjustedByName: session?.email,
-      dailyReport: typeof dailyReport === "string" && dailyReport.trim() !== "" ? dailyReport.trim() : null,
-      ...workedBreakFields(effectiveChecked),
-    },
-  });
+  await prisma.$transaction(
+    blocks.map((b) => {
+      const validKeys = new Set(getBreakWindowsWithinSpan(b.workDate, b.clockIn, b.clockOut).map((w) => w.key));
+      const effectiveChecked = new Set([...b.checked].filter((k) => validKeys.has(k)));
+      return prisma.timeEntry.create({
+        data: {
+          employeeId,
+          siteId: b.siteId,
+          workDate: b.workDate,
+          clockIn: b.clockIn,
+          clockOut: b.clockOut,
+          isManuallyAdjusted: true,
+          adjustedAt: new Date(),
+          adjustmentNote: b.note ?? "手動追加",
+          adjustedByName: session?.email,
+          dailyReport: b.dailyReport,
+          ...workedBreakFields(effectiveChecked),
+        },
+      });
+    }),
+  );
 
   revalidatePath("/clock");
+  revalidatePath("/entries");
   triggerBigQuerySyncInBackground();
-  redirect(`/clock?siteId=${siteId}`);
+  redirect(`/clock?siteId=${blocks[blocks.length - 1].siteId}`);
 }
 
 type AdjustTimeEntryResult =
