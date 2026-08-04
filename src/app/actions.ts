@@ -568,7 +568,7 @@ export async function createManualTimeEntry(
       ) {
         return {
           status: "error",
-          message: `${labelFor(b.index)}${labelFor(other.index)}打刻と時間帯が重なっています`,
+          message: `${b.index + 1}件目が${other.index + 1}件目と時間帯が重なっています`,
         };
       }
     }
