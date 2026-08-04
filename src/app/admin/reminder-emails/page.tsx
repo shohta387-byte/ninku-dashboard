@@ -6,7 +6,7 @@ export default async function ReminderEmailsPage() {
   return (
     <div className="flex flex-col gap-6">
       <h2 className="text-lg font-bold">喚起メール</h2>
-      <p className="text-sm text-zinc-500">
+      <p className="max-w-2xl text-sm text-zinc-500">
         土日祝を除く平日19:30の時点で、その日の打刻が1件も無い従業員に「打刻を忘れていないでしょうか？」という確認メールを、
         登録されているGoogleアカウント宛に自動で送信します。従業員ごとに送信のオン・オフを切り替えられます。
       </p>

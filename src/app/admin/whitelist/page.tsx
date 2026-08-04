@@ -61,7 +61,7 @@ export default async function WhitelistPage() {
         </div>
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex max-w-md flex-col gap-3">
         <h2 className="text-lg font-bold">新しく追加する</h2>
         <AddAllowedEmailForm availableEmployees={availableEmployees} />
       </section>

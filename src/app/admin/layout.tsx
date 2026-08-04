@@ -7,7 +7,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   await requireAdminSession();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 p-6 lg:p-10">
       <div className="flex items-center justify-between text-sm text-zinc-500">
         <Link href="/" className="underline">
           打刻画面へ戻る

@@ -2,7 +2,7 @@ import { SyncButton } from "./sync-button";
 
 export default function BigQueryPage() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex max-w-md flex-col gap-6">
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold">BigQueryへの同期</h2>
         <p className="text-sm text-zinc-500">

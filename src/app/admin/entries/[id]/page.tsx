@@ -34,7 +34,7 @@ export default async function AdminEntryDetailPage({
   const workedBreakKeys = getWorkedBreakKeysFromEntry(entry);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex max-w-2xl flex-col gap-6">
       <Link href="/admin/reports" className="text-sm text-blue-600 underline">
         ← レポートに戻る
       </Link>
