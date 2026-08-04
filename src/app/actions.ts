@@ -825,8 +825,9 @@ export async function getEntryPairForCorrection(entryAId: string, entryBId: stri
   ]);
   if (!entryA || !entryB) return null;
 
+  // 他人の打刻の場合はnullを返す（ページ側は「見つからない」場合と同じnotFound()にする）。
   if (!session.isAdmin && (entryA.employeeId !== session.employeeId || entryB.employeeId !== session.employeeId)) {
-    throw new Error("この打刻を修正する権限がありません");
+    return null;
   }
 
   return { entryA, entryB };
@@ -968,7 +969,7 @@ export async function getAdjustmentLogsForEntry(entryId: string) {
   const entry = await prisma.timeEntry.findUnique({ where: { id: entryId } });
   if (!entry) return [];
   if (entry.employeeId !== session.employeeId && !session.isAdmin) {
-    throw new Error("この打刻の修正履歴を閲覧する権限がありません");
+    return [];
   }
   return prisma.timeEntryAdjustmentLog.findMany({
     where: { timeEntryId: entryId },
@@ -1044,8 +1045,10 @@ export async function getTimeEntryById(entryId: string) {
   }
 
   const entry = await prisma.timeEntry.findUnique({ where: { id: entryId } });
+  // 他人の打刻の場合はnullを返す（呼び出し側は「見つからない」場合と同じ扱いをする）。
+  // 例外を投げると、フォーム操作ではなくページ読み込み時点でNext.jsの汎用エラー画面になってしまうため。
   if (entry && entry.employeeId !== session.employeeId && !session.isAdmin) {
-    throw new Error("この打刻を閲覧する権限がありません");
+    return null;
   }
   return entry;
 }
