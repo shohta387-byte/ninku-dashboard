@@ -96,7 +96,7 @@ model TimeEntry {
 model TimeEntryAdjustmentLog {
   id              String    @id @default(cuid())
   timeEntryId     String
-  timeEntry       TimeEntry @relation(fields: [timeEntryId], references: [id])
+  timeEntry       TimeEntry @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
   adjustedByEmail String
   reason          String?
   pairedLogId     String?
