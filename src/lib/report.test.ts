@@ -77,8 +77,9 @@ describe("summarizeByPeriod", () => {
     expect(byDay).toHaveLength(2);
     expect(byDay[0].key).toBe("2026-08-03");
     expect(byDay[0].entryCount).toBe(2);
-    // a: 07:30-17:30 -> 8h worked -> 1.0ninku。b: 07:30-12:00 -> 4.5h span-2h休憩=2.5h -> 0.3125を丸めて0.31ninku
-    expect(byDay[0].totalNinku).toBeCloseTo(1.0 + 0.31, 10);
+    // a: 07:30-17:30 -> 8h worked -> 1.0ninku。b: 07:30-12:00 -> 4.5h span中、含まれる休憩はbreak1の0.5hのみ
+    // (break2は12:00開始でclockOutと同時刻のため対象外) -> 4h worked -> 0.5ninku
+    expect(byDay[0].totalNinku).toBeCloseTo(1.0 + 0.5, 10);
     expect(byDay[1].key).toBe("2026-08-04");
   });
 });

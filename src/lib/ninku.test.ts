@@ -24,12 +24,20 @@ describe("computeWorkedHours", () => {
     expect(computeWorkedHours(time(7, 30), time(19, 30))).toBe(10);
   });
 
-  it("08:00-12:00 -> 2h (4h span minus flat 2h break)", () => {
-    expect(computeWorkedHours(time(8, 0), time(12, 0))).toBe(2);
+  it("08:00-12:00 -> 3.5h (4h span minus only break1, which falls within the span)", () => {
+    expect(computeWorkedHours(time(8, 0), time(12, 0))).toBe(3.5);
   });
 
-  it("09:00-09:30 -> 0h (clamped at zero, span shorter than break)", () => {
-    expect(computeWorkedHours(time(9, 0), time(9, 30))).toBe(0);
+  it("16:00-17:40 -> 1h40m (no standard break falls within this span, so none is deducted)", () => {
+    expect(computeWorkedHours(time(16, 0), time(17, 40))).toBeCloseTo(100 / 60, 10);
+  });
+
+  it("09:00-09:30 -> 0.5h (no standard break falls within this short span)", () => {
+    expect(computeWorkedHours(time(9, 0), time(9, 30))).toBe(0.5);
+  });
+
+  it("10:00-10:30 -> 0h (span exactly matches the unworked break1 window, clamped at zero)", () => {
+    expect(computeWorkedHours(time(10, 0), time(10, 30))).toBe(0);
   });
 
   it("07:13-17:30 -> 8.25h (07:13 rounds to 07:15, 5-minute step)", () => {
@@ -48,8 +56,8 @@ describe("computeWorkedHours", () => {
     expect(computeWorkedHours(time(7, 30), time(17, 30), ["break1", "break2", "break3"])).toBe(10);
   });
 
-  it("08:00-12:00 with break1 worked -> 2.5h (only break1's 0.5h added back)", () => {
-    expect(computeWorkedHours(time(8, 0), time(12, 0), ["break1"])).toBe(2.5);
+  it("08:00-12:00 with break1 worked -> 4h (break1 is the only break in span, and it's worked)", () => {
+    expect(computeWorkedHours(time(8, 0), time(12, 0), ["break1"])).toBe(4);
   });
 
   it("10:00-10:02 -> 0h (valid order, but rounds into the same 5-minute bucket)", () => {

@@ -76,10 +76,12 @@ export function computeWorkedHours(
   // 丸め後に同じ枠へ収まる短時間の勤務（例: 09:00-09:05）は、順序としては正当なので
   // エラーにはせず稼働時間0として扱う。
   const spanHours = Math.max(0, (outR.getTime() - inR.getTime()) / 3_600_000);
-  const unpaidBreakHours = BREAK_WINDOWS.filter((w) => !workedBreakKeys.includes(w.key)).reduce(
-    (sum, w) => sum + breakWindowHours(w),
-    0,
-  );
+  // 実際の勤務時間帯に含まれる休憩枠だけを未稼働として差し引く（含まれない休憩枠まで
+  // 一律に差し引くと、定時休憩を含まない短時間勤務の稼働時間が不当に0扱いになってしまう）。
+  const breaksInSpan = getBreakWindowsWithinSpan(clockIn, clockIn, clockOut);
+  const unpaidBreakHours = breaksInSpan
+    .filter((w) => !workedBreakKeys.includes(w.key))
+    .reduce((sum, w) => sum + breakWindowHours(w), 0);
   return Math.max(0, spanHours - unpaidBreakHours);
 }
 
