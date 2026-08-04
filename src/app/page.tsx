@@ -60,6 +60,18 @@ export default async function Home() {
       >
         現場を選んで打刻する
       </Link>
+      <Link
+        href="/entries/manual"
+        className="w-full rounded-lg border border-black/10 px-5 py-4 text-center text-lg font-bold shadow-sm active:bg-zinc-100 dark:border-white/10 dark:active:bg-zinc-800"
+      >
+        打刻忘れ
+      </Link>
+      <Link
+        href="/entries"
+        className="w-full rounded-lg border border-black/10 px-5 py-4 text-center text-lg font-bold shadow-sm active:bg-zinc-100 dark:border-white/10 dark:active:bg-zinc-800"
+      >
+        打刻一覧
+      </Link>
     </main>
   );
 }

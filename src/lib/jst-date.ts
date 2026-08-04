@@ -113,6 +113,39 @@ export function formatJstDateTime(instant: Date, options: Intl.DateTimeFormatOpt
   return instant.toLocaleString("ja-JP", { ...options, timeZone: "Asia/Tokyo" });
 }
 
+export interface BillingPeriod {
+  from: Date; // 期間開始日(21日)の日本時間0時
+  to: Date; // 期間終了日(翌月20日)の日本時間0時
+}
+
+// 打刻は「21日〜翌月20日」締めで運用しているため、基準日(省略時は今日)が属する
+// 締め期間を返す。21日以降ならその月の21日始まり、20日以前なら前月21日始まり。
+export function currentBillingPeriod(referenceDate: Date = todayInJst()): BillingPeriod {
+  const { year, month, day } = toJstParts(referenceDate);
+
+  let startYear = year;
+  let startMonth = month;
+  if (day < 21) {
+    startMonth -= 1;
+    if (startMonth === 0) {
+      startMonth = 12;
+      startYear -= 1;
+    }
+  }
+
+  let endYear = startYear;
+  let endMonth = startMonth + 1;
+  if (endMonth === 13) {
+    endMonth = 1;
+    endYear += 1;
+  }
+
+  return {
+    from: jstMidnight(startYear, startMonth, 21),
+    to: jstMidnight(endYear, endMonth, 20),
+  };
+}
+
 // @holiday-jp/holiday_jp はDateのgetFullYear/getMonth/getDate（サーバーの実行タイムゾーン
 // 依存）で日付を読み取る作りのため、そのままだと本番(UTC実行)でJSTの祝日判定がずれる。
 // 「ローカルgetterで読んだときにJSTの年月日になる」ようなDateを作って渡すことで、

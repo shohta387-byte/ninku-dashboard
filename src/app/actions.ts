@@ -13,7 +13,13 @@ import {
   requireAdminSession,
   requireEmployeeSession,
 } from "@/lib/session";
-import { jstMidnightFromInputValue, jstDateTimeFromHHMM, toJstParts, todayInJst } from "@/lib/jst-date";
+import {
+  currentBillingPeriod,
+  jstMidnightFromInputValue,
+  jstDateTimeFromHHMM,
+  toJstParts,
+  todayInJst,
+} from "@/lib/jst-date";
 
 function startOfToday(): Date {
   return todayInJst();
@@ -163,13 +169,17 @@ export interface CreateSiteState {
   siteId?: string;
 }
 
-// 現場の新規登録は管理者のみ行える。同名・近接の現場がある場合は一度警告し、
+// 現場は「みんなで付け足していく」想定のため、ログインしていれば従業員・管理者どちらでも
+// 新規登録できる（管理者限定にしない）。同名・近接の現場がある場合は一度警告し、
 // 表記ゆれや重複登録に気づけるようにする。
 export async function createSite(
   _prevState: CreateSiteState,
   formData: FormData,
 ): Promise<CreateSiteState> {
-  await requireAdminSession();
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
 
   const name = formData.get("name");
   const lat = formData.get("lat");
@@ -288,6 +298,58 @@ export async function getTodayEntriesForSelf() {
     include: { site: true },
     orderBy: { clockIn: "asc" },
   });
+}
+
+// 今の締め期間(21日〜翌月20日)の全打刻。ログイン中の本人のものだけを返す
+// （打刻一覧画面で、退勤し忘れなどを自分で直せるようにするため）。
+export async function getMyEntriesForCurrentPeriod() {
+  const { employeeId } = await requireEmployeeSession();
+  const { from, to } = currentBillingPeriod();
+  return prisma.timeEntry.findMany({
+    where: { employeeId, workDate: { gte: from, lte: to } },
+    include: { site: true },
+    orderBy: [{ workDate: "desc" }, { clockIn: "desc" }],
+  });
+}
+
+export interface DeleteEntryState {
+  status: "idle" | "error";
+  message: string;
+}
+
+// 従業員は自分の打刻を、今の締め期間(21日〜翌月20日)内に限り削除できる
+// （それより前は集計・給与計算が締まっている想定のため変更させない）。管理者は期間の制限なく削除できる。
+export async function deleteTimeEntry(
+  entryId: string,
+  _prevState: DeleteEntryState,
+  _formData: FormData,
+): Promise<DeleteEntryState> {
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+
+  const existing = await prisma.timeEntry.findUnique({ where: { id: entryId } });
+  if (!existing) {
+    return { status: "error", message: "打刻が見つかりません" };
+  }
+
+  if (existing.employeeId !== session.employeeId && !session.isAdmin) {
+    return { status: "error", message: "この打刻を削除する権限がありません" };
+  }
+
+  if (!session.isAdmin) {
+    const { from, to } = currentBillingPeriod();
+    if (existing.workDate < from || existing.workDate > to) {
+      return { status: "error", message: "今の締め期間（21日〜20日）より前の打刻は削除できません" };
+    }
+  }
+
+  await prisma.timeEntry.delete({ where: { id: entryId } });
+  revalidatePath("/entries");
+  revalidatePath("/clock");
+  triggerBigQuerySyncInBackground();
+  return { status: "idle", message: "" };
 }
 
 export interface ClockInState {
@@ -498,6 +560,15 @@ export async function adjustTimeEntry(
   // 本人の打刻、または管理者のみ補正できる。
   if (existing.employeeId !== session.employeeId && !session.isAdmin) {
     return { ok: false, message: "この打刻を修正する権限がありません" };
+  }
+
+  // 従業員本人による修正は、今の締め期間(21日〜翌月20日)内の打刻のみ許可する
+  // （それより前は集計・給与計算が締まっている想定のため）。管理者は制限なし。
+  if (!session.isAdmin) {
+    const { from, to } = currentBillingPeriod();
+    if (existing.workDate < from || existing.workDate > to) {
+      return { ok: false, message: "今の締め期間（21日〜20日）より前の打刻は修正できません" };
+    }
   }
 
   const entry = await prisma.timeEntry.update({

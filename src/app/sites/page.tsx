@@ -18,11 +18,9 @@ export default async function SitesPage() {
       <h1 className="text-xl font-bold">現場を選んでください</h1>
       <SitePicker sites={sites} />
       {sites.length === 0 && <p className="text-zinc-500">現場が登録されていません。</p>}
-      {isAdmin && (
-        <Link href="/sites/new" className="text-center text-sm text-blue-600 underline">
-          新しい現場を追加する
-        </Link>
-      )}
+      <Link href="/sites/new" className="text-center text-sm text-blue-600 underline">
+        新しい現場を追加する
+      </Link>
     </main>
   );
 }
