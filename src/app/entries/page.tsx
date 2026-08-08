@@ -8,7 +8,7 @@ import {
   getWorkedBreakKeysFromEntry,
   type BreakKey,
 } from "@/lib/ninku";
-import { currentBillingPeriod, formatJstDate, formatJstTime, toJstInputValue } from "@/lib/jst-date";
+import { currentBillingPeriod, formatJstDate, formatJstTime, todayInJst, toJstInputValue } from "@/lib/jst-date";
 import { findAdjacentEntryPairs } from "@/lib/entry-pairs";
 import { DeleteEntryButton } from "./delete-entry-button";
 
@@ -19,6 +19,7 @@ export default async function EntriesListPage() {
     getMyEntriesForCurrentPeriod(),
   ]);
   const { from, to } = currentBillingPeriod();
+  const today = todayInJst();
 
   // 一覧は新しい順(workDate desc, clockIn desc)なので、隣接ペアの「後(b)」は先に、
   // 「前(a)」は後に描画される。bのカードの直後にペア修正リンクを挟み込む。
@@ -44,7 +45,7 @@ export default async function EntriesListPage() {
           const earlierPairId = nextIdByLaterId.get(entry.id);
           return (
             <div key={entry.id} className="flex flex-col gap-3">
-              <EntryCard entry={entry} siteName={entry.site.name} />
+              <EntryCard entry={entry} siteName={entry.site.name} today={today} />
               {earlierPairId && (
                 <Link
                   href={`/entries/pair/${earlierPairId}/${entry.id}?returnTo=/entries`}
@@ -71,6 +72,7 @@ export default async function EntriesListPage() {
 function EntryCard({
   entry,
   siteName,
+  today,
 }: {
   entry: {
     id: string;
@@ -82,8 +84,13 @@ function EntryCard({
     workedBreak3: boolean;
   };
   siteName: string;
+  today: Date;
 }) {
   const isOpen = entry.clockIn && !entry.clockOut;
+  // 本日分の未退勤は、まだ稼働中の可能性が高いため「打刻忘れ」の警告ではなく、
+  // 落ち着いたトーンの案内にする（本日より前のものは明確に打刻忘れとして扱う）。
+  const isOpenToday = isOpen && entry.workDate.getTime() === today.getTime();
+  const isOpenPast = isOpen && entry.workDate.getTime() !== today.getTime();
   const isComplete = entry.clockIn && entry.clockOut;
   const workedBreakKeys = isComplete ? getWorkedBreakKeysFromEntry(entry) : [];
   const result = isComplete
@@ -101,11 +108,12 @@ function EntryCard({
         {" 〜 "}
         退勤: {entry.clockOut ? formatJstTime(entry.clockOut, { hour: "2-digit", minute: "2-digit" }) : "未退勤"}
       </p>
-      {isOpen && (
+      {isOpenPast && (
         <p className="text-sm text-orange-600 dark:text-orange-400">
           退勤の打刻がありません。時刻を修正して退勤時刻を入力してください。
         </p>
       )}
+      {isOpenToday && <p className="text-sm text-zinc-500">現在稼働中です。</p>}
       {result && (
         <>
           <p>
