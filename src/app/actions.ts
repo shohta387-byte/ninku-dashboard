@@ -1272,6 +1272,38 @@ export async function updateAllowedEmail(
   return { status: "success", message: "保存しました。" };
 }
 
+export interface UpdateEmployeeNameState {
+  status: "idle" | "error" | "success";
+  message: string;
+}
+
+// ホワイトリスト画面から、既に紐付いている従業員の名前そのものを変更する（表記ゆれの修正など）。
+// メールアドレスとの紐付け自体は変えない。従業員名はBigQueryの打刻テーブルにも
+// 非正規化して持たせているため、変更のたびに再同期する。
+export async function updateEmployeeName(
+  employeeId: string,
+  _prevState: UpdateEmployeeNameState,
+  formData: FormData,
+): Promise<UpdateEmployeeNameState> {
+  await requireAdminSession();
+
+  const name = formData.get("name");
+  if (typeof name !== "string" || name.trim() === "") {
+    return { status: "error", message: "名前を入力してください" };
+  }
+
+  await prisma.employee.update({ where: { id: employeeId }, data: { name: name.trim() } });
+
+  revalidatePath("/admin/whitelist");
+  revalidatePath("/admin/reports");
+  revalidatePath("/admin/sites");
+  revalidatePath("/admin/reminder-emails");
+  revalidatePath("/admin/adjustment-logs");
+  triggerBigQuerySyncInBackground();
+
+  return { status: "success", message: "名前を変更しました。" };
+}
+
 export async function removeAllowedEmail(id: string): Promise<void> {
   await requireAdminSession();
   await prisma.allowedEmail.delete({ where: { id } });
