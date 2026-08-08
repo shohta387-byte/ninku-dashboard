@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentEmployee, linkSelfAsEmployee } from "@/app/actions";
+import { getCurrentEmployee, getOpenEntriesForSelf, linkSelfAsEmployee } from "@/app/actions";
 import { getSession } from "@/lib/session";
 import { TopBar } from "@/app/top-bar";
+import { formatJstDate, formatJstTime } from "@/lib/jst-date";
 
 export default async function Home() {
   const session = await getSession();
@@ -46,7 +47,7 @@ export default async function Home() {
     redirect("/login?error=no_employee");
   }
 
-  const employee = await getCurrentEmployee();
+  const [employee, openEntries] = await Promise.all([getCurrentEmployee(), getOpenEntriesForSelf()]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
@@ -54,6 +55,34 @@ export default async function Home() {
       <div>
         <h1 className="text-xl font-bold">{employee.name} さん、こんにちは</h1>
       </div>
+
+      {openEntries.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-lg border-2 border-orange-400 bg-orange-50 p-4 dark:border-orange-700 dark:bg-orange-950">
+          <p className="font-bold text-orange-800 dark:text-orange-200">
+            ⚠ 退勤の打刻が抜けています
+          </p>
+          <p className="text-sm text-orange-800 dark:text-orange-200">
+            以下の現場で退勤の打刻がありません。押し忘れの可能性があります。時刻を修正してください。
+          </p>
+          <div className="flex flex-col gap-2">
+            {openEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm dark:bg-zinc-900"
+              >
+                <span>
+                  {formatJstDate(entry.workDate, { month: "2-digit", day: "2-digit", weekday: "short" })}{" "}
+                  {entry.site.name}（出勤 {formatJstTime(entry.clockIn!, { hour: "2-digit", minute: "2-digit" })}〜）
+                </span>
+                <Link href={`/entries/${entry.id}/edit`} className="shrink-0 font-bold text-blue-600 underline">
+                  時刻を修正する
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Link
         href="/sites"
         className="w-full rounded-lg bg-blue-600 px-5 py-6 text-center text-xl font-bold text-white shadow-sm active:bg-blue-700"

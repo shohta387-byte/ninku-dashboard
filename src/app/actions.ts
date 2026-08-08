@@ -290,6 +290,22 @@ export async function getSiteLifetimeSummaries() {
   });
 }
 
+// 退勤打刻が抜けたままの打刻（出勤はしたが退勤していない）。ホーム画面で目立たせて
+// 修正を促すために使う。
+// - 「本日分」は今まさに稼働中の可能性があるため対象外にする（誤って警告を出さないため）。
+// - 今の締め期間より前のものは従業員が自分で直せないため対象外にする。
+// （出勤したその日のうちに気づかず日をまたいでも、次の出勤時のチェックは「本日分」しか
+// 見ていないため、古い抜け漏れが残り続けることがある）。
+export async function getOpenEntriesForSelf() {
+  const { employeeId } = await requireEmployeeSession();
+  const { from } = currentBillingPeriod();
+  return prisma.timeEntry.findMany({
+    where: { employeeId, clockIn: { not: null }, clockOut: null, workDate: { gte: from, lt: startOfToday() } },
+    include: { site: true },
+    orderBy: { clockIn: "asc" },
+  });
+}
+
 // 本日の全打刻（現場をまたいで複数件になりうる）。ログイン中の本人のものだけを返す。
 export async function getTodayEntriesForSelf() {
   const { employeeId } = await requireEmployeeSession();
