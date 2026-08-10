@@ -1,24 +1,16 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { deleteTimeEntry, type DeleteEntryState } from "@/app/actions";
+import { useActionState } from "react";
+import { cancelClockIn, type DeleteEntryState } from "@/app/actions";
 
 const initialState: DeleteEntryState = { status: "idle", message: "" };
 
 // 誤った現場を選んで出勤ボタンを押してしまった場合、その場で取り消して
 // 現場選択からやり直せるようにする（退勤してから打刻一覧で削除する、という
-// 遠回りをしなくて済むように）。
+// 遠回りをしなくて済むように）。成功時のリダイレクトはサーバー側で行う。
 export function CancelClockInButton({ entryId }: { entryId: string }) {
-  const router = useRouter();
-  const action = deleteTimeEntry.bind(null, entryId);
+  const action = cancelClockIn.bind(null, entryId);
   const [state, formAction, isPending] = useActionState(action, initialState);
-
-  useEffect(() => {
-    if (state.status === "success") {
-      router.push("/sites");
-    }
-  }, [state, router]);
 
   return (
     <form

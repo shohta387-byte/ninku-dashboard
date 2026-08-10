@@ -368,6 +368,39 @@ export async function deleteTimeEntry(
   return { status: "success", message: "" };
 }
 
+// 誤った現場で出勤ボタンを押してしまった場合に、その場で打刻を取り消して
+// 現場選択からやり直せるようにする。deleteTimeEntryと違い、現在表示中の
+// /clockページ自体を対象にするため、成功時はサーバー側で現場選択画面へ
+// リダイレクトする（同じページの再検証と client 側のルーティングが競合し、
+// リダイレクトが効かないことがあるため）。
+export async function cancelClockIn(
+  entryId: string,
+  _prevState: DeleteEntryState,
+  _formData: FormData,
+): Promise<DeleteEntryState> {
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+
+  const existing = await prisma.timeEntry.findUnique({ where: { id: entryId } });
+  if (!existing) {
+    return { status: "error", message: "打刻が見つかりません" };
+  }
+  if (existing.employeeId !== session.employeeId && !session.isAdmin) {
+    return { status: "error", message: "この打刻を取り消す権限がありません" };
+  }
+  if (existing.clockOut) {
+    return { status: "error", message: "退勤済みの打刻は取り消せません。打刻一覧から削除してください" };
+  }
+
+  await prisma.timeEntry.delete({ where: { id: entryId } });
+  revalidatePath("/entries");
+  revalidatePath("/clock");
+  triggerBigQuerySyncInBackground();
+  redirect("/sites");
+}
+
 export interface ClockInState {
   status: "idle" | "error";
   message: string;
