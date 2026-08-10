@@ -13,6 +13,7 @@ import {
 import { formatJstTime } from "@/lib/jst-date";
 import { ClockInButton } from "./clock-in-button";
 import { ClockOutForm } from "./clock-out-form";
+import { CancelClockInButton } from "./cancel-clock-in-button";
 
 export default async function ClockPage({
   searchParams,
@@ -69,6 +70,7 @@ export default async function ClockPage({
           <p className="-mt-2 text-xs text-zinc-500">
             続けて別の現場で作業する場合はこちら。今の現場の退勤と、次の現場の出勤が同じ時刻でまとめて記録されます。
           </p>
+          <CancelClockInButton entryId={openEntry.id} />
         </div>
       )}
 

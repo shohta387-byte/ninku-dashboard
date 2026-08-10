@@ -329,7 +329,7 @@ export async function getMyEntriesForCurrentPeriod() {
 }
 
 export interface DeleteEntryState {
-  status: "idle" | "error";
+  status: "idle" | "success" | "error";
   message: string;
 }
 
@@ -365,7 +365,7 @@ export async function deleteTimeEntry(
   revalidatePath("/entries");
   revalidatePath("/clock");
   triggerBigQuerySyncInBackground();
-  return { status: "idle", message: "" };
+  return { status: "success", message: "" };
 }
 
 export interface ClockInState {
