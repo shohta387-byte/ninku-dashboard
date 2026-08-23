@@ -63,6 +63,12 @@ export default async function AdminEntryDetailPage({
           <span className="text-zinc-500">現場: </span>
           {entry.site.name}
         </p>
+        {entry.employee.isSubcontractor && (
+          <p>
+            <span className="text-zinc-500">外注区分: </span>
+            外注{entry.nationality && `（${entry.nationality === "JAPANESE" ? "日本人" : "外国人"}）`}
+          </p>
+        )}
         <p>
           <span className="text-zinc-500">日付: </span>
           {formatDate(entry.workDate)}

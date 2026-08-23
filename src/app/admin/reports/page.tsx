@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getEarliestWorkDate, getReportEntries, getSitesForAdmin } from "@/app/actions";
 import {
   summarizeByEmployee,
+  summarizeByNationality,
   summarizeByPeriod,
   summarizeBySite,
   sumHours,
@@ -72,6 +73,7 @@ export default async function ReportsPage({
   const periodSummaries = summarizeByPeriod(entries, groupBy);
   const employeeSummaries = summarizeByEmployee(entries);
   const siteSummaries = summarizeBySite(entries);
+  const nationalitySummaries = summarizeByNationality(entries);
   const totalNinku = sumNinku(entries);
   const totalHours = sumHours(entries);
   const selectedSiteName = siteId ? (sites.find((s) => s.id === siteId)?.name ?? "") : "全現場";
@@ -185,6 +187,48 @@ export default async function ReportsPage({
           >
             現場別人工をCSVでダウンロード
           </a>
+          <a
+            href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from: effectiveFrom, to: effectiveTo, type: "nationality" })}`}
+            className="text-blue-600 underline"
+          >
+            国籍別人工をCSVでダウンロード
+          </a>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-bold">国籍ごとの人工（期間合計）</h2>
+        <p className="text-sm text-zinc-500">
+          日本人・外国人それぞれの合計人工です（外注の代理打刻・通常の従業員どちらも含みます）。
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-zinc-50 dark:bg-zinc-900">
+              <tr>
+                <th className="px-4 py-2">国籍</th>
+                <th className="px-4 py-2">人工</th>
+                <th className="px-4 py-2">稼働時間</th>
+                <th className="px-4 py-2">打刻件数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nationalitySummaries.map((n) => (
+                <tr key={n.nationality} className="border-t border-black/10 dark:border-white/10">
+                  <td className="px-4 py-2">{n.label}</td>
+                  <td className="px-4 py-2 font-bold">{n.totalNinku}</td>
+                  <td className="px-4 py-2">{n.totalHours}h</td>
+                  <td className="px-4 py-2">{n.entryCount}</td>
+                </tr>
+              ))}
+              {nationalitySummaries.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-4 text-center text-zinc-500">
+                    この条件に一致する打刻はありません。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 

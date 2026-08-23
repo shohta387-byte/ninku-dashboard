@@ -12,12 +12,25 @@ datasource db {
   provider = "postgresql"
 }
 
+// 日本人／外国人の区分。従業員本人（個人）は登録時に一度決めれば変わらないため
+// Employee側に持たせる。外注（会社単位のEmployee）は日によって送られてくる
+// チームの国籍が変わりうるため、代理打刻のたびにTimeEntry側で個別に選ぶ。
+enum Nationality {
+  JAPANESE
+  FOREIGN
+}
+
 model Employee {
   id           String        @id @default(cuid())
   name         String
   isActive     Boolean       @default(true)
   // 平日19:30時点で本日の打刻がない場合に喚起メールを送るかどうか（管理画面の「喚起メール」で切替）。
   reminderEmailEnabled Boolean @default(true)
+  // trueなら「外注（会社単位で代理打刻する）」を表すEmployeeレコード。ログインはできない
+  // （AllowedEmailを紐付けない）。個々の作業員は区別せず、会社単位で人工を合算する。
+  isSubcontractor Boolean     @default(false)
+  // 通常の従業員（isSubcontractor: false）の国籍。外注（isSubcontractor: true）側では使わない。
+  nationality  Nationality?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   timeEntries  TimeEntry[]
@@ -79,6 +92,11 @@ model TimeEntry {
 
   // その日その現場での作業内容メモ（任意）。管理者画面の打刻詳細でそのまま表示する。
   dailyReport String?
+
+  // 外注（会社単位）の代理打刻のみ設定する、その打刻1件の国籍区分。同じ外注会社でも
+  // 日によって日本人チーム/外国人チームが変わりうるため、打刻ごとに個別に選ぶ。
+  // 通常の従業員の打刻はnullのままとし、集計時はEmployee.nationalityにフォールバックする。
+  nationality Nationality?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

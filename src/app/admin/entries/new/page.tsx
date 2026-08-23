@@ -1,4 +1,6 @@
 import { getEmployees, getSitesForAdmin } from "@/app/actions";
+// getEmployees()は外注（isSubcontractor: true）も含めて返すため、このフォームでは
+// 従業員・外注どちらも同じプルダウンから選べる（グループ分け表示にする）。
 import { AdminEntryForm } from "./admin-entry-form";
 
 export default async function NewAdminEntryPage() {

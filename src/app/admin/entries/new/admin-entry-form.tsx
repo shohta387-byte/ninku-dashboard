@@ -5,7 +5,7 @@ import { createEntryForEmployee, type CreateEntryForEmployeeState } from "@/app/
 import { BREAK_WINDOWS, getBreakWindowsWithinSpan } from "@/lib/ninku";
 import { jstDateTimeFromHHMM, jstMidnightFromInputValue, toJstInputValue, todayInJst } from "@/lib/jst-date";
 
-type Employee = { id: string; name: string };
+type Employee = { id: string; name: string; isSubcontractor: boolean };
 type Site = { id: string; name: string };
 
 function generateTimeOptions(): string[] {
@@ -30,6 +30,10 @@ export function AdminEntryForm({ employees, sites }: { employees: Employee[]; si
   const [date, setDate] = useState(todayInputValue());
   const [clockInTime, setClockInTime] = useState("07:30");
   const [clockOutTime, setClockOutTime] = useState("17:30");
+  const staffEmployees = employees.filter((e) => !e.isSubcontractor);
+  const subcontractors = employees.filter((e) => e.isSubcontractor);
+  const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? "");
+  const selectedIsSubcontractor = employees.find((e) => e.id === employeeId)?.isSubcontractor ?? false;
 
   // 日付・時刻はいずれも日本時間として扱う（端末のタイムゾーン設定に関わらず一定にするため
   // jst-date経由で組み立てる）。
@@ -58,15 +62,48 @@ export function AdminEntryForm({ employees, sites }: { employees: Employee[]; si
         <select
           name="employeeId"
           required
+          value={employeeId}
+          onChange={(e) => setEmployeeId(e.target.value)}
           className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
         >
-          {employees.map((employee) => (
-            <option key={employee.id} value={employee.id}>
-              {employee.name}
-            </option>
-          ))}
+          {staffEmployees.length > 0 && (
+            <optgroup label="従業員">
+              {staffEmployees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {subcontractors.length > 0 && (
+            <optgroup label="外注">
+              {subcontractors.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </label>
+
+      {selectedIsSubcontractor && (
+        <div className="flex flex-col gap-1 rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <span className="text-sm text-zinc-500">
+            国籍（外注は打刻ごとに選びます。同じ会社でもチームによって変わるため）
+          </span>
+          <div className="flex gap-6 pt-1">
+            <label className="flex items-center gap-2 text-lg">
+              <input type="radio" name="nationality" value="JAPANESE" required className="h-6 w-6" />
+              日本人
+            </label>
+            <label className="flex items-center gap-2 text-lg">
+              <input type="radio" name="nationality" value="FOREIGN" required className="h-6 w-6" />
+              外国人
+            </label>
+          </div>
+        </div>
+      )}
 
       <label className="flex flex-col gap-1">
         <span className="text-sm text-zinc-500">現場</span>

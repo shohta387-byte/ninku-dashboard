@@ -3,6 +3,7 @@ import {
   dayKey,
   monthKey,
   summarizeByEmployee,
+  summarizeByNationality,
   summarizeByPeriod,
   sumNinku,
   toReportEntry,
@@ -109,5 +110,39 @@ describe("sumNinku", () => {
   it("sums total ninku across all entries", () => {
     const entries = [toReportEntry(makeEntry()), toReportEntry(makeEntry())];
     expect(sumNinku(entries)).toBeCloseTo(2.0, 10);
+  });
+});
+
+describe("summarizeByNationality", () => {
+  it("groups entries into JAPANESE / FOREIGN / UNKNOWN buckets", () => {
+    const entries = [
+      toReportEntry(makeEntry({ nationality: "JAPANESE" })),
+      toReportEntry(
+        makeEntry({
+          nationality: "FOREIGN",
+          clockIn: jstTime(2026, 8, 3, 7, 30),
+          clockOut: jstTime(2026, 8, 3, 9, 30),
+        }),
+      ),
+      toReportEntry(makeEntry({ nationality: undefined })),
+    ];
+
+    const summary = summarizeByNationality(entries);
+    expect(summary.map((s) => s.nationality)).toEqual(["JAPANESE", "FOREIGN", "UNKNOWN"]);
+    expect(summary.find((s) => s.nationality === "JAPANESE")!.totalNinku).toBeCloseTo(1.0, 10);
+    expect(summary.find((s) => s.nationality === "UNKNOWN")!.label).toBe("未設定");
+  });
+
+  it("omits buckets with no entries", () => {
+    const entries = [toReportEntry(makeEntry({ nationality: "JAPANESE" }))];
+    const summary = summarizeByNationality(entries);
+    expect(summary).toHaveLength(1);
+    expect(summary[0].nationality).toBe("JAPANESE");
+  });
+
+  it("treats a null nationality the same as an unset one", () => {
+    const entries = [toReportEntry(makeEntry({ nationality: null }))];
+    const summary = summarizeByNationality(entries);
+    expect(summary[0].nationality).toBe("UNKNOWN");
   });
 });

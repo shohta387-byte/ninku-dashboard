@@ -9,6 +9,8 @@ import { jstMidnightFromInputValue, jstWeekdayIndex, toJstParts } from "./jst-da
 
 export type ReportGranularity = "day" | "week" | "month";
 
+export type Nationality = "JAPANESE" | "FOREIGN";
+
 export interface ReportSourceEntry {
   id: string;
   employeeId: string;
@@ -22,6 +24,9 @@ export interface ReportSourceEntry {
   workedBreak2: boolean;
   workedBreak3: boolean;
   dailyReport?: string | null;
+  // 呼び出し側で「打刻自体の国籍（外注の代理打刻）→ 無ければ従業員本体の国籍」の順で
+  // 解決済みの値を渡す。どちらも未設定ならnull（国籍別集計では「未設定」として扱う）。
+  nationality?: Nationality | null;
 }
 
 export interface ReportEntry extends ReportSourceEntry {
@@ -173,6 +178,48 @@ export function summarizeBySite(entries: ReportEntry[]): SiteSummary[] {
   return [...map.values()]
     .map((s) => ({ ...s, totalNinku: roundNinku(s.totalNinku), totalHours: roundHours(s.totalHours) }))
     .sort((a, b) => b.totalNinku - a.totalNinku);
+}
+
+export interface NationalitySummary {
+  nationality: Nationality | "UNKNOWN";
+  label: string;
+  totalNinku: number;
+  totalHours: number;
+  entryCount: number;
+}
+
+const NATIONALITY_LABELS: Record<Nationality | "UNKNOWN", string> = {
+  JAPANESE: "日本人",
+  FOREIGN: "外国人",
+  UNKNOWN: "未設定",
+};
+
+// 国籍別（日本人／外国人）の人工合計。従業員・外注どちらの打刻も合算する。
+// 国籍が未設定（移行前の既存従業員など）の打刻は「未設定」としてまとめる。
+export function summarizeByNationality(entries: ReportEntry[]): NationalitySummary[] {
+  const map = new Map<Nationality | "UNKNOWN", NationalitySummary>();
+  for (const entry of entries) {
+    const key = entry.nationality ?? "UNKNOWN";
+    const existing = map.get(key);
+    if (existing) {
+      existing.totalNinku += entry.ninku.totalNinku;
+      existing.totalHours += entry.ninku.workedHours;
+      existing.entryCount += 1;
+    } else {
+      map.set(key, {
+        nationality: key,
+        label: NATIONALITY_LABELS[key],
+        totalNinku: entry.ninku.totalNinku,
+        totalHours: entry.ninku.workedHours,
+        entryCount: 1,
+      });
+    }
+  }
+  const order: (Nationality | "UNKNOWN")[] = ["JAPANESE", "FOREIGN", "UNKNOWN"];
+  return order
+    .map((key) => map.get(key))
+    .filter((s): s is NationalitySummary => s !== undefined)
+    .map((s) => ({ ...s, totalNinku: roundNinku(s.totalNinku), totalHours: roundHours(s.totalHours) }));
 }
 
 export function sumNinku(entries: ReportEntry[]): number {

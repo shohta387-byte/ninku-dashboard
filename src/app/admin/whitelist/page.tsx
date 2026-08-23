@@ -3,7 +3,9 @@ import { AddAllowedEmailForm } from "./add-allowed-email-form";
 import { AllowedEmailRowForm } from "./allowed-email-row-form";
 
 export default async function WhitelistPage() {
-  const [allowedEmails, employees] = await Promise.all([getAllowedEmails(), getEmployees()]);
+  const [allowedEmails, allEmployees] = await Promise.all([getAllowedEmails(), getEmployees()]);
+  // 外注（会社）はログインさせないため、紐付け候補には出さない。
+  const employees = allEmployees.filter((e) => !e.isSubcontractor);
   const linkedEmployeeIds = new Set(
     allowedEmails.filter((a) => a.employeeId).map((a) => a.employeeId),
   );

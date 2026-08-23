@@ -12,6 +12,9 @@ export function AdminNav() {
       <Link href="/admin/sites" className="underline">
         現場管理
       </Link>
+      <Link href="/admin/subcontractors" className="underline">
+        外注管理
+      </Link>
       <Link href="/admin/entries/new" className="underline">
         従業員の打刻を代理入力
       </Link>

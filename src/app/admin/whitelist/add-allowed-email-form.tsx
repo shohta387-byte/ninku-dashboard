@@ -51,6 +51,19 @@ export function AddAllowedEmailForm({ availableEmployees }: { availableEmployees
           className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
         />
       </label>
+      <div className="flex flex-col gap-1">
+        <span className="text-sm text-zinc-500">国籍（新しい従業員として登録する場合、任意）</span>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 text-lg">
+            <input type="radio" name="nationality" value="JAPANESE" className="h-5 w-5" />
+            日本人
+          </label>
+          <label className="flex items-center gap-2 text-lg">
+            <input type="radio" name="nationality" value="FOREIGN" className="h-5 w-5" />
+            外国人
+          </label>
+        </div>
+      </div>
       <label className="flex items-center gap-3 text-lg">
         <input type="checkbox" name="isAdmin" className="h-6 w-6" />
         管理者権限を付与する

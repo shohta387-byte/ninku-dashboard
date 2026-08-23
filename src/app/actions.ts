@@ -26,6 +26,13 @@ function startOfToday(): Date {
   return todayInJst();
 }
 
+// 国籍選択のラジオボタン(値は"JAPANESE"/"FOREIGN")をフォームから読み取る。
+// 未選択・不正な値の場合はundefined（未設定のまま）を返す。
+type NationalityValue = "JAPANESE" | "FOREIGN";
+function parseNationality(value: FormDataEntryValue | null): NationalityValue | undefined {
+  return value === "JAPANESE" || value === "FOREIGN" ? value : undefined;
+}
+
 // "YYYY-MM-DD" を日本時間のその日0時0分の絶対時刻に変換する
 function startOfDateString(dateStr: string): Date {
   return jstMidnightFromInputValue(dateStr);
@@ -120,6 +127,48 @@ export async function getEmployees() {
     where: { isActive: true },
     orderBy: { name: "asc" },
   });
+}
+
+// --- 管理者: 外注（会社単位の代理打刻先） ---
+
+export interface CreateSubcontractorState {
+  status: "idle" | "success" | "error";
+  message: string;
+}
+
+// 外注は「会社」を従業員(Employee)として登録するが、ログインはできない
+// （AllowedEmailを紐付けない）。個々の作業員は区別せず、会社単位で人工を合算する。
+export async function createSubcontractor(
+  _prevState: CreateSubcontractorState,
+  formData: FormData,
+): Promise<CreateSubcontractorState> {
+  await requireAdminSession();
+
+  const name = formData.get("name");
+  if (typeof name !== "string" || name.trim() === "") {
+    return { status: "error", message: "会社名を入力してください" };
+  }
+
+  await prisma.employee.create({ data: { name: name.trim(), isSubcontractor: true } });
+
+  revalidatePath("/admin/subcontractors");
+  revalidatePath("/admin/entries/new");
+  return { status: "success", message: `「${name.trim()}」を登録しました。` };
+}
+
+export async function getSubcontractors() {
+  await requireAdminSession();
+  return prisma.employee.findMany({
+    where: { isSubcontractor: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+export async function setSubcontractorActive(id: string, isActive: boolean): Promise<void> {
+  await requireAdminSession();
+  await prisma.employee.update({ where: { id }, data: { isActive } });
+  revalidatePath("/admin/subcontractors");
+  revalidatePath("/admin/entries/new");
 }
 
 export async function getSites() {
@@ -1155,6 +1204,7 @@ export async function createEntryForEmployee(
   const clockOutTime = formData.get("clockOutTime");
   const note = formData.get("note");
   const dailyReport = formData.get("dailyReport");
+  const nationality = parseNationality(formData.get("nationality"));
 
   if (typeof employeeId !== "string" || employeeId === "") {
     return { status: "error", message: "従業員を選択してください" };
@@ -1177,6 +1227,11 @@ export async function createEntryForEmployee(
   const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
   if (!employee) {
     return { status: "error", message: "従業員が見つかりません" };
+  }
+  // 外注（会社）は日によって送られてくるチームの国籍が変わりうるため、代理打刻のたびに
+  // 選んでもらう。通常の従業員は本人のnationalityが既にEmployeeに設定されているため不要。
+  if (employee.isSubcontractor && !nationality) {
+    return { status: "error", message: "日本人／外国人を選択してください" };
   }
   const site = await prisma.site.findUnique({ where: { id: siteId } });
   if (!site) {
@@ -1219,6 +1274,7 @@ export async function createEntryForEmployee(
       adjustmentNote: typeof note === "string" && note.trim() !== "" ? note.trim() : "管理者が代理で入力",
       adjustedByName: session.email,
       dailyReport: typeof dailyReport === "string" && dailyReport.trim() !== "" ? dailyReport.trim() : null,
+      nationality: employee.isSubcontractor ? nationality : null,
       ...workedBreakFields(effectiveChecked),
     },
   });
@@ -1261,6 +1317,7 @@ export async function addAllowedEmail(
   const email = formData.get("email");
   const employeeId = formData.get("employeeId");
   const newEmployeeName = formData.get("newEmployeeName");
+  const nationality = parseNationality(formData.get("nationality"));
   const isAdmin = formData.get("isAdmin") != null;
 
   if (typeof email !== "string" || email.trim() === "") {
@@ -1282,7 +1339,7 @@ export async function addAllowedEmail(
 
       if (hasNewName) {
         const created = await tx.employee.create({
-          data: { name: (newEmployeeName as string).trim() },
+          data: { name: (newEmployeeName as string).trim(), nationality },
         });
         resolvedEmployeeId = created.id;
       }
@@ -1317,6 +1374,7 @@ export async function updateAllowedEmail(
 
   const employeeId = formData.get("employeeId");
   const newEmployeeName = formData.get("newEmployeeName");
+  const nationality = parseNationality(formData.get("nationality"));
   const isAdmin = formData.get("isAdmin") != null;
 
   const hasExistingSelection = typeof employeeId === "string" && employeeId !== "";
@@ -1333,7 +1391,7 @@ export async function updateAllowedEmail(
 
     if (hasNewName) {
       const created = await tx.employee.create({
-        data: { name: (newEmployeeName as string).trim() },
+        data: { name: (newEmployeeName as string).trim(), nationality },
       });
       resolvedEmployeeId = created.id;
     }
@@ -1381,6 +1439,34 @@ export async function updateEmployeeName(
   triggerBigQuerySyncInBackground();
 
   return { status: "success", message: "名前を変更しました。" };
+}
+
+export interface UpdateEmployeeNationalityState {
+  status: "idle" | "success" | "error";
+  message: string;
+}
+
+// 従業員本体の国籍を設定・変更する。移行前から登録されている従業員は国籍が
+// 未設定のままなので、ホワイトリスト画面から後から設定できるようにする。
+export async function updateEmployeeNationality(
+  employeeId: string,
+  _prevState: UpdateEmployeeNationalityState,
+  formData: FormData,
+): Promise<UpdateEmployeeNationalityState> {
+  await requireAdminSession();
+
+  const nationality = parseNationality(formData.get("nationality"));
+  if (!nationality) {
+    return { status: "error", message: "日本人／外国人を選択してください" };
+  }
+
+  await prisma.employee.update({ where: { id: employeeId }, data: { nationality } });
+
+  revalidatePath("/admin/whitelist");
+  revalidatePath("/admin/reports");
+  triggerBigQuerySyncInBackground();
+
+  return { status: "success", message: "国籍を設定しました。" };
 }
 
 export async function removeAllowedEmail(id: string): Promise<void> {
@@ -1434,6 +1520,9 @@ export async function getReportEntries(filters: ReportFilters): Promise<ReportEn
         workedBreak2: e.workedBreak2,
         workedBreak3: e.workedBreak3,
         dailyReport: e.dailyReport,
+        // 打刻自体に国籍が設定されていれば(外注の代理打刻)それを使い、無ければ
+        // 従業員本体の国籍(通常の従業員)にフォールバックする。
+        nationality: e.nationality ?? e.employee.nationality,
       }),
     );
 }
@@ -1515,7 +1604,8 @@ export async function syncToBigQueryAction(
 export async function getEmployeesForReminderSettings() {
   await requireAdminSession();
   return prisma.employee.findMany({
-    where: { isActive: true },
+    // 外注（会社）はログインもメール受信もしないため対象外にする。
+    where: { isActive: true, isSubcontractor: false },
     orderBy: { name: "asc" },
     include: { allowedEmail: true },
   });
