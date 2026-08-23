@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getEarliestWorkDate, getReportEntries, getSitesForAdmin } from "@/app/actions";
+import { getAllOpenEntries, getEarliestWorkDate, getReportEntries, getSitesForAdmin } from "@/app/actions";
 import {
   summarizeByEmployee,
   summarizeByNationality,
@@ -55,9 +55,10 @@ export default async function ReportsPage({
     params.groupBy === "week" || params.groupBy === "month" ? params.groupBy : "day";
   const isAllTime = params.range === "all";
 
-  const [sites, earliestWorkDate] = await Promise.all([
+  const [sites, earliestWorkDate, openEntries] = await Promise.all([
     getSitesForAdmin(),
     isAllTime ? getEarliestWorkDate(siteId || undefined) : Promise.resolve(null),
+    getAllOpenEntries(),
   ]);
 
   // 「全期間」を選んだ場合は、その現場（全現場なら全体）で最初に打刻された日〜今日までを使う。
@@ -88,6 +89,34 @@ export default async function ReportsPage({
 
   return (
     <div className="flex flex-col gap-8">
+      {openEntries.length > 0 && (
+        <section className="flex flex-col gap-3 rounded-lg border-2 border-orange-400 bg-orange-50 p-4 dark:border-orange-700 dark:bg-orange-950">
+          <p className="font-bold text-orange-800 dark:text-orange-200">
+            ⚠ 退勤の打刻が無い打刻が{openEntries.length}件あります
+          </p>
+          <p className="text-sm text-orange-800 dark:text-orange-200">
+            レポートには退勤済みの打刻しか反映されません。締め期間が過ぎたものは本人が
+            直せないため、管理者側で時刻を修正してください。
+          </p>
+          <div className="flex flex-col gap-2">
+            {openEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm dark:bg-zinc-900"
+              >
+                <span>
+                  {formatDate(entry.workDate)} {entry.employee.name} / {entry.site.name}
+                  （出勤 {formatTime(entry.clockIn!)}〜）
+                </span>
+                <Link href={`/entries/${entry.id}/edit`} className="shrink-0 font-bold text-blue-600 underline">
+                  時刻を修正する
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold">検索条件</h2>
         <form className="group flex flex-wrap items-end gap-4 rounded-lg border border-black/10 p-4 dark:border-white/10">

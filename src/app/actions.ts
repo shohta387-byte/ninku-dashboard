@@ -298,6 +298,19 @@ export async function setSiteActive(siteId: string, isActive: boolean): Promise<
   triggerSiteBigQuerySyncInBackground();
 }
 
+// 全従業員の、退勤打刻が無いままの打刻（管理者向け）。レポート画面は退勤済みの打刻しか
+// 集計に含めないため、締め期間が過ぎて従業員が自分で直せなくなった打刻忘れは、
+// ここで一覧にして拾い上げないと誰にも気づかれず放置されてしまう。
+// 本日分は現在稼働中の可能性があるため対象外にする（従業員ホーム画面の警告と同じ考え方）。
+export async function getAllOpenEntries() {
+  await requireAdminSession();
+  return prisma.timeEntry.findMany({
+    where: { clockIn: { not: null }, clockOut: null, workDate: { lt: startOfToday() } },
+    include: { employee: true, site: true },
+    orderBy: { clockIn: "asc" },
+  });
+}
+
 // 現場ごとの全期間の人工合計。作業が終わって無効化した現場も「過去の現場」として
 // 振り返れるように、稼働中・無効どちらも対象に含める。
 export async function getSiteLifetimeSummaries() {

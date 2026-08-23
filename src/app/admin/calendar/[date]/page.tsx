@@ -73,6 +73,11 @@ function DayEntryCard({
         {" 〜 "}
         退勤: {entry.clockOut ? formatJstTime(entry.clockOut, { hour: "2-digit", minute: "2-digit" }) : "未退勤"}
       </p>
+      {!entry.clockOut && (
+        <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
+          ⚠ 退勤の打刻がありません
+        </p>
+      )}
       {result && (
         <>
           <p>
@@ -87,9 +92,14 @@ function DayEntryCard({
         </>
       )}
       <div className="flex items-center justify-between pt-2">
-        <Link href={`/admin/entries/${entry.id}`} className="text-blue-600 underline">
-          詳細
-        </Link>
+        <div className="flex gap-4">
+          <Link href={`/admin/entries/${entry.id}`} className="text-blue-600 underline">
+            詳細
+          </Link>
+          <Link href={`/entries/${entry.id}/edit`} className="text-blue-600 underline">
+            時刻を修正する
+          </Link>
+        </div>
         <DeleteEntryButton entryId={entry.id} />
       </div>
     </div>

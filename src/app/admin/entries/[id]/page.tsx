@@ -52,7 +52,18 @@ export default async function AdminEntryDetailPage({
       <Link href="/admin/reports" className="text-sm text-blue-600 underline">
         ← レポートに戻る
       </Link>
-      <h2 className="text-lg font-bold">打刻詳細</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold">打刻詳細</h2>
+        <Link href={`/entries/${entry.id}/edit`} className="text-sm text-blue-600 underline">
+          時刻を修正する
+        </Link>
+      </div>
+
+      {!entry.clockOut && (
+        <p className="rounded-lg border-2 border-orange-400 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-800 dark:border-orange-700 dark:bg-orange-950 dark:text-orange-200">
+          ⚠ 退勤の打刻がありません。「時刻を修正する」から退勤時刻を入力してください。
+        </p>
+      )}
 
       <section className="flex flex-col gap-2 rounded-lg border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
         <p>
