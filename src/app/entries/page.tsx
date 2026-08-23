@@ -11,6 +11,7 @@ import {
 import { currentBillingPeriod, formatJstDate, formatJstTime, todayInJst, toJstInputValue } from "@/lib/jst-date";
 import { findAdjacentEntryPairs } from "@/lib/entry-pairs";
 import { DeleteEntryButton } from "./delete-entry-button";
+import { EntriesViewTabs } from "./entries-view-tabs";
 
 export default async function EntriesListPage() {
   const { isAdmin } = await requireEmployeeSession();
@@ -39,6 +40,8 @@ export default async function EntriesListPage() {
           今の締め期間: {toJstInputValue(from)} 〜 {toJstInputValue(to)}
         </p>
       </div>
+
+      <EntriesViewTabs active="list" />
 
       <div className="flex flex-col gap-3">
         {entries.map((entry) => {

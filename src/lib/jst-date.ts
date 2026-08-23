@@ -146,6 +146,27 @@ export function currentBillingPeriod(referenceDate: Date = todayInJst()): Billin
   };
 }
 
+export interface MonthRange {
+  from: Date; // その月の1日の日本時間0時
+  to: Date; // その月の末日の日本時間0時
+}
+
+// 指定した日本時間の年月(1-12)の、月初〜月末（workDateと比較できる形）を返す。
+// カレンダー表示で「この月の打刻」を絞り込むために使う。
+export function jstMonthRange(year: number, month: number): MonthRange {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  return {
+    from: jstMidnight(year, month, 1),
+    to: jstMidnight(year, month, daysInMonth),
+  };
+}
+
+// 年月(1-12)を、deltaヶ月分ずらした年月にする（カレンダーの前月・翌月ナビゲーション用）。
+export function shiftJstMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const total = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(total / 12), month: (((total % 12) + 12) % 12) + 1 };
+}
+
 // @holiday-jp/holiday_jp はDateのgetFullYear/getMonth/getDate（サーバーの実行タイムゾーン
 // 依存）で日付を読み取る作りのため、そのままだと本番(UTC実行)でJSTの祝日判定がずれる。
 // 「ローカルgetterで読んだときにJSTの年月日になる」ようなDateを作って渡すことで、

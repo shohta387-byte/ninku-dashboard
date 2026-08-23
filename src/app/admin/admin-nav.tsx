@@ -6,6 +6,9 @@ export function AdminNav() {
       <Link href="/admin/reports" className="underline">
         レポート
       </Link>
+      <Link href="/admin/calendar" className="underline">
+        カレンダー
+      </Link>
       <Link href="/admin/sites" className="underline">
         現場管理
       </Link>

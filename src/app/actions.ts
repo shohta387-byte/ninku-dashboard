@@ -17,6 +17,7 @@ import {
   currentBillingPeriod,
   jstMidnightFromInputValue,
   jstDateTimeFromHHMM,
+  jstMonthRange,
   toJstParts,
   todayInJst,
 } from "@/lib/jst-date";
@@ -328,6 +329,31 @@ export async function getMyEntriesForCurrentPeriod() {
   });
 }
 
+// --- 打刻カレンダー（従業員本人） ---
+
+// 打刻一覧は今の締め期間分のみだが、カレンダーは過去の月もさかのぼって
+// 閲覧できるようにするため、指定した月(1-12)の全打刻を別途取得する。
+export async function getMyEntriesForMonth(year: number, month: number) {
+  const { employeeId } = await requireEmployeeSession();
+  const { from, to } = jstMonthRange(year, month);
+  return prisma.timeEntry.findMany({
+    where: { employeeId, workDate: { gte: from, lte: to } },
+    include: { site: true },
+    orderBy: { clockIn: "asc" },
+  });
+}
+
+// カレンダーの日付をクリックした先（1日分の詳細・削除画面）で使う。
+export async function getMyEntriesForDay(dateStr: string) {
+  const { employeeId } = await requireEmployeeSession();
+  const workDate = jstMidnightFromInputValue(dateStr);
+  return prisma.timeEntry.findMany({
+    where: { employeeId, workDate },
+    include: { site: true },
+    orderBy: { clockIn: "asc" },
+  });
+}
+
 export interface DeleteEntryState {
   status: "idle" | "success" | "error";
   message: string;
@@ -364,6 +390,10 @@ export async function deleteTimeEntry(
   await prisma.timeEntry.delete({ where: { id: entryId } });
   revalidatePath("/entries");
   revalidatePath("/clock");
+  revalidatePath("/entries/calendar");
+  revalidatePath("/entries/calendar/[date]", "page");
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/calendar/[date]", "page");
   triggerBigQuerySyncInBackground();
   return { status: "success", message: "" };
 }
@@ -1423,6 +1453,30 @@ export async function getEarliestWorkDate(siteId?: string): Promise<Date | null>
   });
 
   return earliest?.workDate ?? null;
+}
+
+// --- 管理者: 打刻カレンダー（全従業員） ---
+
+// 指定した月(1-12)の、全従業員分の打刻。管理者向けカレンダーの月表示で使う。
+export async function getAllEntriesForMonth(year: number, month: number) {
+  await requireAdminSession();
+  const { from, to } = jstMonthRange(year, month);
+  return prisma.timeEntry.findMany({
+    where: { workDate: { gte: from, lte: to } },
+    include: { site: true, employee: true },
+    orderBy: [{ clockIn: "asc" }],
+  });
+}
+
+// カレンダーの日付をクリックした先（1日分・全従業員分の詳細・削除画面）で使う。
+export async function getAllEntriesForDay(dateStr: string) {
+  await requireAdminSession();
+  const workDate = jstMidnightFromInputValue(dateStr);
+  return prisma.timeEntry.findMany({
+    where: { workDate },
+    include: { site: true, employee: true },
+    orderBy: [{ clockIn: "asc" }],
+  });
 }
 
 // --- 管理者: BigQuery連携 ---
