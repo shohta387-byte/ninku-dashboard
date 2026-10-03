@@ -1,37 +1,48 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2f6bf0"/>
-      <stop offset="1" stop-color="#173a9e"/>
+      <stop offset="0" stop-color="#5b9bff"/>
+      <stop offset="1" stop-color="#2d5fe3"/>
     </linearGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
-      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="bar"><rect x="76" y="396" width="360" height="36" rx="6"/></clipPath>
+    <linearGradient id="hat" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd84d"/>
+      <stop offset="1" stop-color="#ffb81c"/>
+    </linearGradient>
+    <clipPath id="bar"><rect x="84" y="404" width="344" height="34" rx="17"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect width="512" height="512" rx="112" fill="url(#sheen)"/>
-  <g fill="none" stroke="#ffffff" stroke-width="50" stroke-linejoin="miter">
+  <rect width="512" height="512" rx="120" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="120" fill="url(#sheen)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="48" stroke-linecap="round" stroke-linejoin="round">
     <!-- 人 -->
-    <path d="M170 104 C 170 214, 142 300, 74 368"/>
-    <path d="M160 218 C 184 284, 216 330, 262 368"/>
+    <path d="M166 180 C 164 256, 140 318, 92 364"/>
+    <path d="M162 258 C 180 306, 204 340, 232 364"/>
     <!-- 工 -->
-    <path d="M296 136 H 436"/>
-    <path d="M366 136 V 344"/>
-    <path d="M284 344 H 448"/>
+    <path d="M314 176 H 424"/>
+    <path d="M369 176 V 352"/>
+    <path d="M304 352 H 434"/>
   </g>
-  <!-- 足場の床：工事現場の黄色と黒のしま -->
+  <!-- 「人」の頭にかぶせた黄色いヘルメット -->
+  <g>
+    <path d="M96 160 C 96 92, 236 92, 236 160 Z" fill="url(#hat)"/>
+    <rect x="78" y="150" width="176" height="28" rx="14" fill="#ffb81c"/>
+    <path d="M166 96 V 152" stroke="#f59f00" stroke-width="12" stroke-linecap="round"/>
+    <path d="M118 134 C 122 118, 134 106, 148 102" stroke="#ffffff" stroke-opacity="0.7" stroke-width="8" stroke-linecap="round" fill="none"/>
+  </g>
+  <!-- 黄色と紺のしま（工事現場のバー） -->
   <g clip-path="url(#bar)">
-    <rect x="76" y="396" width="360" height="36" fill="#fbbf24"/>
-    <g fill="#14213d">
-      <path d="M96 396 h24 l-24 36 h-24z"/>
-      <path d="M156 396 h24 l-24 36 h-24z"/>
-      <path d="M216 396 h24 l-24 36 h-24z"/>
-      <path d="M276 396 h24 l-24 36 h-24z"/>
-      <path d="M336 396 h24 l-24 36 h-24z"/>
-      <path d="M396 396 h24 l-24 36 h-24z"/>
-      <path d="M456 396 h24 l-24 36 h-24z"/>
+    <rect x="84" y="404" width="344" height="34" fill="#ffc531"/>
+    <g fill="#24408f">
+      <path d="M100 404 h22 l-22 34 h-22z"/>
+      <path d="M158 404 h22 l-22 34 h-22z"/>
+      <path d="M216 404 h22 l-22 34 h-22z"/>
+      <path d="M274 404 h22 l-22 34 h-22z"/>
+      <path d="M332 404 h22 l-22 34 h-22z"/>
+      <path d="M390 404 h22 l-22 34 h-22z"/>
+      <path d="M448 404 h22 l-22 34 h-22z"/>
     </g>
   </g>
 </svg>
