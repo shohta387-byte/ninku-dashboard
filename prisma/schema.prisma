@@ -50,9 +50,24 @@ model AllowedEmail {
   updatedAt  DateTime  @updatedAt
 }
 
+// 元請け（現場の発注元の会社）。現場を探しやすくするため・同名の現場を見分けるために
+// 現場をまとめる単位として使う。登録・編集は管理者のみ。削除はせず無効化で運用する
+// （過去の現場との結びつきを残すため）。
+model Contractor {
+  id        String   @id @default(cuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sites     Site[]
+}
+
 model Site {
   id          String      @id @default(cuid())
   name        String
+  // 元請けは任意（未設定のまま登録でき、あとから管理者が振り分ける）。
+  contractorId String?
+  contractor   Contractor? @relation(fields: [contractorId], references: [id])
   // 位置情報は任意（未設定でも現場を登録できる。地図表示・現在地からの距離順表示・
   // 近接重複検出は、設定されている現場同士でのみ行われる）。
   lat         Float?
@@ -61,6 +76,8 @@ model Site {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   timeEntries TimeEntry[]
+
+  @@index([contractorId])
 }
 
 model TimeEntry {
