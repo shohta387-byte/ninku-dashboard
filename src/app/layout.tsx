@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "人工管理システム",
   description: "現場の打刻と人工の集計",
+  // iPhoneの「ホーム画面に追加」で表示される名前。appleWebAppは使わない（独立したアプリ表示に
+  // なり、Googleログインが引き継がれなくなることがあるため）。
+  other: { "apple-mobile-web-app-title": "人工管理" },
 };
 
 export const viewport: Viewport = {

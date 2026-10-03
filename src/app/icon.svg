@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f6bf0"/>
+      <stop offset="1" stop-color="#173a9e"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="bar"><rect x="76" y="396" width="360" height="36" rx="6"/></clipPath>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#sheen)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="50" stroke-linejoin="miter">
+    <!-- 人 -->
+    <path d="M170 104 C 170 214, 142 300, 74 368"/>
+    <path d="M160 218 C 184 284, 216 330, 262 368"/>
+    <!-- 工 -->
+    <path d="M296 136 H 436"/>
+    <path d="M366 136 V 344"/>
+    <path d="M284 344 H 448"/>
+  </g>
+  <!-- 足場の床：工事現場の黄色と黒のしま -->
+  <g clip-path="url(#bar)">
+    <rect x="76" y="396" width="360" height="36" fill="#fbbf24"/>
+    <g fill="#14213d">
+      <path d="M96 396 h24 l-24 36 h-24z"/>
+      <path d="M156 396 h24 l-24 36 h-24z"/>
+      <path d="M216 396 h24 l-24 36 h-24z"/>
+      <path d="M276 396 h24 l-24 36 h-24z"/>
+      <path d="M336 396 h24 l-24 36 h-24z"/>
+      <path d="M396 396 h24 l-24 36 h-24z"/>
+      <path d="M456 396 h24 l-24 36 h-24z"/>
+    </g>
+  </g>
+</svg>
