@@ -18,6 +18,7 @@ import {
   toJstInputValue,
 } from "@/lib/jst-date";
 import { calculateNinkuForEntry, getWorkedBreakKeysFromEntry, roundNinku } from "@/lib/ninku";
+import { siteLabel } from "@/lib/site-label";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -147,7 +148,7 @@ async function EmployeeAttendance({
       key,
       isSubcontractor ? { kind: "subcontractor", units, hasOpenEntry } : { kind: "employee", day: attendance },
     );
-    days.push({ date, attendance, units, sites: [...new Set(dayEntries.map((e) => e.site.name))] });
+    days.push({ date, attendance, units, sites: [...new Set(dayEntries.map((e) => siteLabel(e.site)))] });
   }
   days.sort((a, b) => a.date.getTime() - b.date.getTime());
 

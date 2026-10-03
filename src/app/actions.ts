@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { BREAK_WINDOWS, getBreakWindowsWithinSpan, type BreakKey } from "@/lib/ninku";
 import { sumHours, sumNinku, toReportEntry, type ReportEntry } from "@/lib/report";
+import { siteLabel } from "@/lib/site-label";
 import { geocodeAddress, type GeocodeResult } from "@/lib/geocode";
 import {
   createSession,
@@ -175,13 +176,14 @@ export async function getSites() {
   await requireEmployeeSession();
   return prisma.site.findMany({
     where: { isActive: true },
+    include: { contractor: true },
     orderBy: { name: "asc" },
   });
 }
 
 export async function getSiteById(siteId: string) {
   await requireEmployeeSession();
-  return prisma.site.findUnique({ where: { id: siteId } });
+  return prisma.site.findUnique({ where: { id: siteId }, include: { contractor: true } });
 }
 
 // 住所やビル名から緯度経度を検索する（現場登録時、現場にいなくても位置を設定できるように）。
@@ -234,10 +236,20 @@ export async function createSite(
   const name = formData.get("name");
   const lat = formData.get("lat");
   const lng = formData.get("lng");
+  const contractorIdRaw = formData.get("contractorId");
   const confirmDuplicate = formData.get("confirmDuplicate") != null;
 
   if (typeof name !== "string" || name.trim() === "") {
     return { status: "error", message: "現場名を入力してください" };
+  }
+
+  // 元請けは任意。選ばれている場合は、有効な元請けかどうかを確認する。
+  const contractorId = typeof contractorIdRaw === "string" && contractorIdRaw !== "" ? contractorIdRaw : null;
+  if (contractorId) {
+    const contractor = await prisma.contractor.findUnique({ where: { id: contractorId } });
+    if (!contractor || !contractor.isActive) {
+      return { status: "error", message: "選択した元請けが見つかりません" };
+    }
   }
 
   // 位置情報は任意。入力されている場合のみ数値として検証する。
@@ -255,7 +267,11 @@ export async function createSite(
   if (!confirmDuplicate) {
     const existingSites = await prisma.site.findMany({ where: { isActive: true } });
     const normalizedNew = normalizeSiteName(name);
-    const nameMatch = existingSites.find((s) => normalizeSiteName(s.name) === normalizedNew);
+    // 同じ名前でも元請けが違えば別の現場として正当なので、同じ元請け（未設定同士を含む）の
+    // 中で同名の場合だけ警告する。
+    const nameMatch = existingSites.find(
+      (s) => normalizeSiteName(s.name) === normalizedNew && s.contractorId === contractorId,
+    );
     const nearbyMatch =
       latNum !== null && lngNum !== null
         ? existingSites.find(
@@ -277,15 +293,105 @@ export async function createSite(
   }
 
   const site = await prisma.site.create({
-    data: { name: name.trim(), lat: latNum, lng: lngNum },
+    data: { name: name.trim(), lat: latNum, lng: lngNum, contractorId },
   });
 
   revalidatePath("/sites");
   revalidatePath("/admin/sites");
+  revalidatePath("/admin/contractors");
   revalidatePath("/entries/manual");
   triggerSiteBigQuerySyncInBackground();
 
   return { status: "success", message: `「${site.name}」を登録しました。`, siteId: site.id };
+}
+
+// --- 元請け ---
+
+// 現場登録フォームの元請け選択肢（有効なもののみ）。現場は従業員も登録できるため、
+// 選ぶだけなら従業員にも見せる。元請け自体の登録・編集は管理者のみ。
+export async function getActiveContractors() {
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+  return prisma.contractor.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+}
+
+// 元請け管理画面用。無効な元請けも、結びついている現場とあわせて表示する。
+export async function getContractorsWithSites() {
+  await requireAdminSession();
+  const [contractors, unassignedSites] = await Promise.all([
+    prisma.contractor.findMany({
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      include: { sites: { orderBy: [{ isActive: "desc" }, { name: "asc" }] } },
+    }),
+    prisma.site.findMany({
+      where: { contractorId: null },
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    }),
+  ]);
+  return { contractors, unassignedSites };
+}
+
+export interface ContractorFormState {
+  status: "idle" | "success" | "error";
+  message: string;
+}
+
+function revalidateContractorPages() {
+  revalidatePath("/admin/contractors");
+  revalidatePath("/admin/sites");
+  revalidatePath("/sites");
+}
+
+export async function createContractor(
+  _prevState: ContractorFormState,
+  formData: FormData,
+): Promise<ContractorFormState> {
+  await requireAdminSession();
+  const name = formData.get("name");
+  if (typeof name !== "string" || name.trim() === "") {
+    return { status: "error", message: "元請け名を入力してください" };
+  }
+  const normalized = normalizeSiteName(name);
+  const existing = await prisma.contractor.findMany();
+  const duplicate = existing.find((c) => normalizeSiteName(c.name) === normalized);
+  if (duplicate) {
+    return {
+      status: "error",
+      message: `「${duplicate.name}」は既に登録されています${duplicate.isActive ? "" : "（無効）"}。`,
+    };
+  }
+  const contractor = await prisma.contractor.create({ data: { name: name.trim() } });
+  revalidateContractorPages();
+  return { status: "success", message: `「${contractor.name}」を登録しました。` };
+}
+
+export async function renameContractor(contractorId: string, formData: FormData): Promise<void> {
+  await requireAdminSession();
+  const name = formData.get("name");
+  if (typeof name !== "string" || name.trim() === "") return;
+  await prisma.contractor.update({ where: { id: contractorId }, data: { name: name.trim() } });
+  revalidateContractorPages();
+}
+
+export async function setContractorActive(contractorId: string, isActive: boolean): Promise<void> {
+  await requireAdminSession();
+  await prisma.contractor.update({ where: { id: contractorId }, data: { isActive } });
+  revalidateContractorPages();
+}
+
+// 現場の元請けを付け替える（空文字なら未設定に戻す）。
+export async function setSiteContractor(siteId: string, formData: FormData): Promise<void> {
+  await requireAdminSession();
+  const raw = formData.get("contractorId");
+  const contractorId = typeof raw === "string" && raw !== "" ? raw : null;
+  await prisma.site.update({ where: { id: siteId }, data: { contractorId } });
+  revalidateContractorPages();
 }
 
 // --- 管理者: 現場管理 ---
@@ -306,7 +412,7 @@ export async function getAllOpenEntries() {
   await requireAdminSession();
   return prisma.timeEntry.findMany({
     where: { clockIn: { not: null }, clockOut: null, workDate: { lt: startOfToday() } },
-    include: { employee: true, site: true },
+    include: { employee: true, site: { include: { contractor: true } } },
     orderBy: { clockIn: "asc" },
   });
 }
@@ -316,7 +422,7 @@ export async function getAllOpenEntries() {
 export async function getSiteLifetimeSummaries() {
   await requireAdminSession();
 
-  const sites = await prisma.site.findMany({ orderBy: { name: "asc" } });
+  const sites = await prisma.site.findMany({ include: { contractor: true }, orderBy: { name: "asc" } });
   const entries = await prisma.timeEntry.findMany({
     where: { clockIn: { not: null }, clockOut: { not: null } },
   });
@@ -364,7 +470,7 @@ export async function getOpenEntriesForSelf() {
   const { from } = currentBillingPeriod();
   return prisma.timeEntry.findMany({
     where: { employeeId, clockIn: { not: null }, clockOut: null, workDate: { gte: from, lt: startOfToday() } },
-    include: { site: true },
+    include: { site: { include: { contractor: true } } },
     orderBy: { clockIn: "asc" },
   });
 }
@@ -374,7 +480,7 @@ export async function getTodayEntriesForSelf() {
   const { employeeId } = await requireEmployeeSession();
   return prisma.timeEntry.findMany({
     where: { employeeId, workDate: startOfToday() },
-    include: { site: true },
+    include: { site: { include: { contractor: true } } },
     orderBy: { clockIn: "asc" },
   });
 }
@@ -386,7 +492,7 @@ export async function getMyEntriesForCurrentPeriod() {
   const { from, to } = currentBillingPeriod();
   return prisma.timeEntry.findMany({
     where: { employeeId, workDate: { gte: from, lte: to } },
-    include: { site: true },
+    include: { site: { include: { contractor: true } } },
     orderBy: [{ workDate: "desc" }, { clockIn: "desc" }],
   });
 }
@@ -400,7 +506,7 @@ export async function getMyEntriesForMonth(year: number, month: number) {
   const { from, to } = jstMonthRange(year, month);
   return prisma.timeEntry.findMany({
     where: { employeeId, workDate: { gte: from, lte: to } },
-    include: { site: true },
+    include: { site: { include: { contractor: true } } },
     orderBy: { clockIn: "asc" },
   });
 }
@@ -411,7 +517,7 @@ export async function getMyEntriesForDay(dateStr: string) {
   const workDate = jstMidnightFromInputValue(dateStr);
   return prisma.timeEntry.findMany({
     where: { employeeId, workDate },
-    include: { site: true },
+    include: { site: { include: { contractor: true } } },
     orderBy: { clockIn: "asc" },
   });
 }
@@ -961,8 +1067,8 @@ export async function getEntryPairForCorrection(entryAId: string, entryBId: stri
   }
 
   const [entryA, entryB] = await Promise.all([
-    prisma.timeEntry.findUnique({ where: { id: entryAId }, include: { site: true } }),
-    prisma.timeEntry.findUnique({ where: { id: entryBId }, include: { site: true } }),
+    prisma.timeEntry.findUnique({ where: { id: entryAId }, include: { site: { include: { contractor: true } } } }),
+    prisma.timeEntry.findUnique({ where: { id: entryBId }, include: { site: { include: { contractor: true } } } }),
   ]);
   if (!entryA || !entryB) return null;
 
@@ -1134,7 +1240,7 @@ export async function getAdjustmentLogs(filters: AdjustmentLogFilters) {
         ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
       },
     },
-    include: { timeEntry: { include: { employee: true, site: true } } },
+    include: { timeEntry: { include: { employee: true, site: { include: { contractor: true } } } } },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -1145,7 +1251,7 @@ export async function getEntryDetail(entryId: string) {
 
   const entry = await prisma.timeEntry.findUnique({
     where: { id: entryId },
-    include: { employee: true, site: true },
+    include: { employee: true, site: { include: { contractor: true } } },
   });
   if (!entry) return null;
 
@@ -1494,7 +1600,7 @@ export async function removeAllowedEmail(id: string): Promise<void> {
 // （getSitesは打刻用でisActiveのみを返すため、管理者はこちらを使う）。
 export async function getSitesForAdmin() {
   await requireAdminSession();
-  return prisma.site.findMany({ orderBy: { name: "asc" } });
+  return prisma.site.findMany({ include: { contractor: true }, orderBy: { name: "asc" } });
 }
 
 export interface ReportFilters {
@@ -1513,7 +1619,7 @@ export async function getReportEntries(filters: ReportFilters): Promise<ReportEn
       workDate: { gte: startOfDateString(filters.from), lte: startOfDateString(filters.to) },
       ...(filters.siteId ? { siteId: filters.siteId } : {}),
     },
-    include: { employee: true, site: true },
+    include: { employee: true, site: { include: { contractor: true } } },
     orderBy: [{ workDate: "asc" }, { clockIn: "asc" }],
   });
 
@@ -1525,7 +1631,7 @@ export async function getReportEntries(filters: ReportFilters): Promise<ReportEn
         employeeId: e.employeeId,
         employeeName: e.employee.name,
         siteId: e.siteId,
-        siteName: e.site.name,
+        siteName: siteLabel(e.site),
         workDate: e.workDate,
         clockIn: e.clockIn!,
         clockOut: e.clockOut!,
@@ -1565,7 +1671,7 @@ export async function getAllEntriesForMonth(year: number, month: number) {
   const { from, to } = jstMonthRange(year, month);
   return prisma.timeEntry.findMany({
     where: { workDate: { gte: from, lte: to } },
-    include: { site: true, employee: true },
+    include: { site: { include: { contractor: true } }, employee: true },
     orderBy: [{ clockIn: "asc" }],
   });
 }
@@ -1576,7 +1682,7 @@ export async function getAllEntriesForDay(dateStr: string) {
   const workDate = jstMidnightFromInputValue(dateStr);
   return prisma.timeEntry.findMany({
     where: { workDate },
-    include: { site: true, employee: true },
+    include: { site: { include: { contractor: true } }, employee: true },
     orderBy: [{ clockIn: "asc" }],
   });
 }
@@ -1597,7 +1703,7 @@ export async function getEntriesForEmployeeInRange(employeeId: string, from: Dat
   await requireAdminSession();
   return prisma.timeEntry.findMany({
     where: { employeeId, workDate: { gte: from, lte: to } },
-    include: { site: true },
+    include: { site: { include: { contractor: true } } },
     orderBy: { clockIn: "asc" },
   });
 }

@@ -4,6 +4,7 @@ import { getCurrentEmployee, getOpenEntriesForSelf, linkSelfAsEmployee } from "@
 import { getSession } from "@/lib/session";
 import { TopBar } from "@/app/top-bar";
 import { formatJstDate, formatJstTime } from "@/lib/jst-date";
+import { siteLabel } from "@/lib/site-label";
 
 export default async function Home() {
   const session = await getSession();
@@ -72,7 +73,7 @@ export default async function Home() {
               >
                 <span>
                   {formatJstDate(entry.workDate, { month: "2-digit", day: "2-digit", weekday: "short" })}{" "}
-                  {entry.site.name}（出勤 {formatJstTime(entry.clockIn!, { hour: "2-digit", minute: "2-digit" })}〜）
+                  {siteLabel(entry.site)}（出勤 {formatJstTime(entry.clockIn!, { hour: "2-digit", minute: "2-digit" })}〜）
                 </span>
                 <Link href={`/entries/${entry.id}/edit`} className="shrink-0 font-bold text-blue-600 underline">
                   時刻を修正する

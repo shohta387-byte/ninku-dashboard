@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAdjustmentLogs, getEmployees } from "@/app/actions";
 import { formatJstDate, formatJstDateTime, todayInJst, toJstInputValue, toJstParts } from "@/lib/jst-date";
+import { siteLabel } from "@/lib/site-label";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -100,7 +101,7 @@ export default async function AdjustmentLogsPage({
                   <td className="px-4 py-2">{formatJstDateTime(log.createdAt, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                   <td className="px-4 py-2">{formatJstDate(log.timeEntry.workDate, { month: "2-digit", day: "2-digit", weekday: "short" })}</td>
                   <td className="px-4 py-2">{log.timeEntry.employee.name}</td>
-                  <td className="px-4 py-2">{log.timeEntry.site.name}</td>
+                  <td className="px-4 py-2">{siteLabel(log.timeEntry.site)}</td>
                   <td className="px-4 py-2">{log.adjustedByEmail}</td>
                   <td className="px-4 py-2">{log.reason ?? ""}</td>
                   <td className="px-4 py-2">

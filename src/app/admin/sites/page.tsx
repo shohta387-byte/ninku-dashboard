@@ -16,6 +16,7 @@ function SiteTable({ summaries }: { summaries: SiteSummary[] }) {
         <thead className="bg-zinc-50 dark:bg-zinc-900">
           <tr>
             <th className="px-4 py-2">現場名</th>
+            <th className="px-4 py-2">元請け</th>
             <th className="px-4 py-2">緯度・経度</th>
             <th className="px-4 py-2">累計人工</th>
             <th className="px-4 py-2">累計稼働時間</th>
@@ -30,6 +31,9 @@ function SiteTable({ summaries }: { summaries: SiteSummary[] }) {
                 <Link href={`/admin/reports?siteId=${site.id}`} className="text-blue-600 underline">
                   {site.name}
                 </Link>
+              </td>
+              <td className="px-4 py-2">
+                {site.contractor ? site.contractor.name : <span className="text-xs text-zinc-500">未設定</span>}
               </td>
               <td className="px-4 py-2 text-xs text-zinc-500">
                 {site.lat !== null && site.lng !== null
@@ -50,7 +54,7 @@ function SiteTable({ summaries }: { summaries: SiteSummary[] }) {
           ))}
           {summaries.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-4 text-center text-zinc-500">
+              <td colSpan={7} className="px-4 py-4 text-center text-zinc-500">
                 該当する現場はありません。
               </td>
             </tr>

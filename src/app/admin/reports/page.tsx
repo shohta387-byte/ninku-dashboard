@@ -10,6 +10,7 @@ import {
   type ReportGranularity,
 } from "@/lib/report";
 import { formatJstDate, formatJstTime, todayInJst, toJstInputValue, toJstParts } from "@/lib/jst-date";
+import { siteLabel } from "@/lib/site-label";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -105,7 +106,7 @@ export default async function ReportsPage({
                 className="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm dark:bg-zinc-900"
               >
                 <span>
-                  {formatDate(entry.workDate)} {entry.employee.name} / {entry.site.name}
+                  {formatDate(entry.workDate)} {entry.employee.name} / {siteLabel(entry.site)}
                   （出勤 {formatTime(entry.clockIn!)}〜）
                 </span>
                 <Link href={`/entries/${entry.id}/edit`} className="shrink-0 font-bold text-blue-600 underline">
@@ -130,7 +131,7 @@ export default async function ReportsPage({
               <option value="">全現場</option>
               {sites.map((site) => (
                 <option key={site.id} value={site.id}>
-                  {site.name}
+                  {siteLabel(site)}
                 </option>
               ))}
             </select>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentEmployee, getSites, getTimeEntryById } from "@/app/actions";
+import { getActiveContractors, getCurrentEmployee, getSites, getTimeEntryById } from "@/app/actions";
 import { requireEmployeeSession } from "@/lib/session";
 import { TopBar } from "@/app/top-bar";
 import { toJstInputValue, formatJstTime } from "@/lib/jst-date";
@@ -12,9 +12,10 @@ export default async function ManualEntryPage({
 }) {
   const { isAdmin, employeeId } = await requireEmployeeSession();
   const { fromEntryId } = await searchParams;
-  const [employee, sites, fromEntry] = await Promise.all([
+  const [employee, sites, contractors, fromEntry] = await Promise.all([
     getCurrentEmployee(),
     getSites(),
+    getActiveContractors(),
     fromEntryId ? getTimeEntryById(fromEntryId) : Promise.resolve(null),
   ]);
 
@@ -36,11 +37,7 @@ export default async function ManualEntryPage({
           直前の打刻の退勤時刻（{prefill.date} {prefill.clockInTime}）を出勤時刻として入力しました。現場を選んでください。
         </p>
       )}
-      {sites.length === 0 ? (
-        <p className="text-zinc-500">現場が登録されていません。</p>
-      ) : (
-        <ManualEntryForm sites={sites} prefill={prefill ?? undefined} />
-      )}
+      <ManualEntryForm sites={sites} contractors={contractors} prefill={prefill ?? undefined} />
     </main>
   );
 }

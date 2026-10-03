@@ -1,13 +1,26 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { createSite, searchAddress, type CreateSiteState } from "@/app/actions";
 
 const initialState: CreateSiteState = { status: "idle", message: "" };
 
-export function AddSiteForm() {
+type Contractor = { id: string; name: string };
+
+// onCreatedを渡すと、登録できた時点でその現場IDを受け取れる（打刻の途中でその場で現場を
+// 追加し、そのまま出勤画面へ進む場合などに使う）。渡さない場合は続けて登録できるようリセットする。
+export function AddSiteForm({
+  contractors,
+  onCreated,
+  preferCurrentLocation = false,
+}: {
+  contractors: Contractor[];
+  onCreated?: (siteId: string) => void;
+  preferCurrentLocation?: boolean;
+}) {
   const [state, formAction, isPending] = useActionState(createSite, initialState);
   const [name, setName] = useState("");
+  const [contractorId, setContractorId] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [locationLabel, setLocationLabel] = useState("");
@@ -27,6 +40,7 @@ export function AddSiteForm() {
     setHandledState(state);
     if (state.status === "success") {
       setName("");
+      setContractorId("");
       setLat(null);
       setLng(null);
       setLocationLabel("");
@@ -34,6 +48,15 @@ export function AddSiteForm() {
       setSearchResults([]);
     }
   }
+
+  // 同じ登録結果で二度呼ばないよう、通知済みの結果を覚えておく。
+  const notifiedStateRef = useRef<CreateSiteState | null>(null);
+  useEffect(() => {
+    if (state.status === "success" && state.siteId && onCreated && notifiedStateRef.current !== state) {
+      notifiedStateRef.current = state;
+      onCreated(state.siteId);
+    }
+  }, [state, onCreated]);
 
   function useCurrentLocation() {
     setLocationError("");
@@ -98,6 +121,24 @@ export function AddSiteForm() {
         />
       </label>
 
+      <label className="flex flex-col gap-1">
+        <span className="text-sm text-zinc-500">元請け</span>
+        <select
+          name="contractorId"
+          value={contractorId}
+          onChange={(e) => setContractorId(e.target.value)}
+          className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
+        >
+          <option value="">未設定（わからない・一覧にない）</option>
+          {contractors.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-zinc-400">一覧にない元請けは、未設定のまま登録してください（あとで管理者が設定します）。</span>
+      </label>
+
       <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
         <div>
           <p className="text-sm text-zinc-500">位置情報（任意）</p>
@@ -111,7 +152,7 @@ export function AddSiteForm() {
           onClick={useCurrentLocation}
           className="rounded-lg bg-zinc-100 px-4 py-3 font-bold dark:bg-zinc-800"
         >
-          現在地を使う（その場にいる場合）
+          {preferCurrentLocation ? "現在地を使う（おすすめ）" : "現在地を使う（その場にいる場合）"}
         </button>
 
         <div className="flex gap-2">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { getCurrentUserLabel } from "@/app/actions";
+import { getActiveContractors, getCurrentUserLabel } from "@/app/actions";
 import { TopBar } from "@/app/top-bar";
 import { AdminNav } from "@/app/admin/admin-nav";
 import { AddSiteForm } from "./add-site-form";
@@ -12,7 +12,7 @@ export default async function NewSitePage() {
     redirect("/login");
   }
 
-  const label = await getCurrentUserLabel();
+  const [label, contractors] = await Promise.all([getCurrentUserLabel(), getActiveContractors()]);
   // 従業員は現場選択画面へ、従業員に紐付いていない管理者専用アカウントは現場管理画面へ戻す。
   const backHref = session.employeeId ? "/sites" : "/admin/sites";
 
@@ -24,7 +24,7 @@ export default async function NewSitePage() {
         ← 戻る
       </Link>
       <h1 className="text-xl font-bold">現場を追加する</h1>
-      <AddSiteForm />
+      <AddSiteForm contractors={contractors} />
     </main>
   );
 }

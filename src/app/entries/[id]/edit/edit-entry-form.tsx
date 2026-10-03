@@ -2,8 +2,9 @@
 
 import { useActionState } from "react";
 import { adjustTimeEntryForm, type AdjustEntryState } from "@/app/actions";
+import { siteLabel } from "@/lib/site-label";
 
-type Site = { id: string; name: string };
+type Site = { id: string; name: string; contractor?: { name: string } | null };
 
 const initialState: AdjustEntryState = { status: "idle", message: "" };
 
@@ -38,7 +39,7 @@ export function EditEntryForm({
         >
           {sites.map((site) => (
             <option key={site.id} value={site.id}>
-              {site.name}
+              {siteLabel(site)}
             </option>
           ))}
         </select>

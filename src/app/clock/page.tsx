@@ -14,6 +14,7 @@ import { formatJstTime } from "@/lib/jst-date";
 import { ClockInButton } from "./clock-in-button";
 import { ClockOutForm } from "./clock-out-form";
 import { CancelClockInButton } from "./cancel-clock-in-button";
+import { siteLabel } from "@/lib/site-label";
 
 export default async function ClockPage({
   searchParams,
@@ -51,7 +52,7 @@ export default async function ClockPage({
       </Link>
       <div>
         <h1 className="text-xl font-bold">
-          本日の現場: {openEntry ? openEntry.site.name : selectedSite.name}
+          本日の現場: {siteLabel(openEntry ? openEntry.site : selectedSite)}
         </h1>
       </div>
 
@@ -78,7 +79,7 @@ export default async function ClockPage({
         <div className="flex flex-col gap-3">
           <h2 className="text-sm font-bold text-zinc-500">本日の記録</h2>
           {completedEntries.map((entry) => (
-            <EntrySummary key={entry.id} entry={entry} siteName={entry.site.name} />
+            <EntrySummary key={entry.id} entry={entry} siteName={siteLabel(entry.site)} />
           ))}
         </div>
       )}

@@ -12,6 +12,7 @@ import { currentBillingPeriod, formatJstDate, formatJstTime, todayInJst, toJstIn
 import { findAdjacentEntryPairs } from "@/lib/entry-pairs";
 import { DeleteEntryButton } from "./delete-entry-button";
 import { EntriesViewTabs } from "./entries-view-tabs";
+import { siteLabel } from "@/lib/site-label";
 
 export default async function EntriesListPage() {
   const { isAdmin } = await requireEmployeeSession();
@@ -48,7 +49,7 @@ export default async function EntriesListPage() {
           const earlierPairId = nextIdByLaterId.get(entry.id);
           return (
             <div key={entry.id} className="flex flex-col gap-3">
-              <EntryCard entry={entry} siteName={entry.site.name} today={today} />
+              <EntryCard entry={entry} siteName={siteLabel(entry.site)} today={today} />
               {earlierPairId && (
                 <Link
                   href={`/entries/pair/${earlierPairId}/${entry.id}?returnTo=/entries`}

@@ -9,6 +9,7 @@ import {
 import { BREAK_WINDOWS, getWorkedBreakKeysFromEntry } from "@/lib/ninku";
 import { formatJstDate, formatJstDateTime } from "@/lib/jst-date";
 import { findNeighbors } from "@/lib/entry-pairs";
+import { siteLabel } from "@/lib/site-label";
 
 function formatDateTime(date: Date | null): string {
   if (!date) return "—";
@@ -72,7 +73,7 @@ export default async function AdminEntryDetailPage({
         </p>
         <p>
           <span className="text-zinc-500">現場: </span>
-          {entry.site.name}
+          {siteLabel(entry.site)}
         </p>
         {entry.employee.isSubcontractor && (
           <p>

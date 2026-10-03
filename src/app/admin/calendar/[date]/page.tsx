@@ -8,6 +8,7 @@ import {
 } from "@/lib/ninku";
 import { formatJstDate, formatJstTime, jstMidnightFromInputValue, toJstParts } from "@/lib/jst-date";
 import { DeleteEntryButton } from "@/app/entries/delete-entry-button";
+import { siteLabel } from "@/lib/site-label";
 
 export default async function AdminCalendarDayPage({
   params,
@@ -33,7 +34,7 @@ export default async function AdminCalendarDayPage({
 
       <div className="flex flex-col gap-3">
         {entries.map((entry) => (
-          <DayEntryCard key={entry.id} entry={entry} employeeName={entry.employee.name} siteName={entry.site.name} />
+          <DayEntryCard key={entry.id} entry={entry} employeeName={entry.employee.name} siteName={siteLabel(entry.site)} />
         ))}
       </div>
     </div>

@@ -4,9 +4,10 @@ import { useActionState, useMemo, useState } from "react";
 import { createEntryForEmployee, type CreateEntryForEmployeeState } from "@/app/actions";
 import { BREAK_WINDOWS, getBreakWindowsWithinSpan } from "@/lib/ninku";
 import { jstDateTimeFromHHMM, jstMidnightFromInputValue, toJstInputValue, todayInJst } from "@/lib/jst-date";
+import { siteLabel } from "@/lib/site-label";
 
 type Employee = { id: string; name: string; isSubcontractor: boolean };
-type Site = { id: string; name: string };
+type Site = { id: string; name: string; contractor?: { name: string } | null };
 
 function generateTimeOptions(): string[] {
   const options: string[] = [];
@@ -114,7 +115,7 @@ export function AdminEntryForm({ employees, sites }: { employees: Employee[]; si
         >
           {sites.map((site) => (
             <option key={site.id} value={site.id}>
-              {site.name}
+              {siteLabel(site)}
             </option>
           ))}
         </select>

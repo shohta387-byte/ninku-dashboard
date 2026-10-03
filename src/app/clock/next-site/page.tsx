@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentEmployee, getSites, getTimeEntryById } from "@/app/actions";
+import { getActiveContractors, getCurrentEmployee, getSites, getTimeEntryById } from "@/app/actions";
 import { requireEmployeeSession } from "@/lib/session";
 import { TopBar } from "@/app/top-bar";
 import { getBreakWindowsWithinSpan } from "@/lib/ninku";
@@ -18,10 +18,11 @@ export default async function NextSitePage({
   }
 
   const { isAdmin, employeeId } = await requireEmployeeSession();
-  const [employee, entry, allSites] = await Promise.all([
+  const [employee, entry, allSites, contractors] = await Promise.all([
     getCurrentEmployee(),
     getTimeEntryById(entryId),
     getSites(),
+    getActiveContractors(),
   ]);
 
   if (!entry || entry.employeeId !== employeeId || !entry.clockIn || entry.clockOut) {
@@ -45,11 +46,7 @@ export default async function NextSitePage({
         </p>
       </div>
 
-      {nextSites.length === 0 ? (
-        <p className="text-zinc-500">移動できる他の現場が登録されていません。</p>
-      ) : (
-        <NextSiteForm entryId={entry.id} eligibleBreaks={eligibleBreaks} sites={nextSites} />
-      )}
+      <NextSiteForm entryId={entry.id} eligibleBreaks={eligibleBreaks} sites={nextSites} contractors={contractors} />
     </main>
   );
 }

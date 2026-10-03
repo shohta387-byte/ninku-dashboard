@@ -7,6 +7,7 @@ import { AdminNav } from "@/app/admin/admin-nav";
 import { formatJstDate, formatJstTime, toJstParts } from "@/lib/jst-date";
 import { roundToTimeStep } from "@/lib/ninku";
 import { PairCorrectionForm } from "./pair-correction-form";
+import { siteLabel } from "@/lib/site-label";
 
 function formatTimeStep(date: Date): string {
   const rounded = roundToTimeStep(date);
@@ -53,10 +54,10 @@ export default async function PairCorrectionPage({
 
       <div className="flex flex-col gap-2 rounded-lg border border-black/10 bg-white p-4 text-sm dark:border-white/10 dark:bg-zinc-900">
         <p>
-          A: <span className="font-bold">{entryA.site.name}</span>（退勤: {formatJstTime(entryA.clockOut, { hour: "2-digit", minute: "2-digit" })}）
+          A: <span className="font-bold">{siteLabel(entryA.site)}</span>（退勤: {formatJstTime(entryA.clockOut, { hour: "2-digit", minute: "2-digit" })}）
         </p>
         <p>
-          B: <span className="font-bold">{entryB.site.name}</span>（出勤:{" "}
+          B: <span className="font-bold">{siteLabel(entryB.site)}</span>（出勤:{" "}
           {entryB.clockIn ? formatJstTime(entryB.clockIn, { hour: "2-digit", minute: "2-digit" }) : "—"}）
         </p>
       </div>
