@@ -9,7 +9,16 @@ import {
   sumNinku,
   type ReportGranularity,
 } from "@/lib/report";
-import { formatJstDate, formatJstTime, todayInJst, toJstInputValue, toJstParts } from "@/lib/jst-date";
+import {
+  currentBillingPeriod,
+  formatJstDate,
+  formatJstTime,
+  jstMonthRange,
+  shiftJstMonth,
+  todayInJst,
+  toJstInputValue,
+  toJstParts,
+} from "@/lib/jst-date";
 import { siteLabel } from "@/lib/site-label";
 
 function pad2(n: number): string {
@@ -84,6 +93,24 @@ export default async function ReportsPage({
   // 現場ごとの表・CSVリンクなど、他の画面へ遷移するリンクに引き継ぐ検索条件。
   // 「全期間」中はリンク先でも改めて全期間として計算し直させたいので、日付そのものではなく
   // range=all を引き継ぐ（現場ごとに最初の打刻日は異なるため）。
+  // よく使う期間をワンタップで選べるようにする（締めは21日〜翌月20日）。
+  const thisPeriod = currentBillingPeriod();
+  const lastPeriod = currentBillingPeriod(new Date(thisPeriod.from.getTime() - 24 * 60 * 60 * 1000));
+  const { year: thisYear, month: thisMonth } = toJstParts(todayInJst());
+  const lastMonth = shiftJstMonth(thisYear, thisMonth, -1);
+  const thisMonthRange = jstMonthRange(thisYear, thisMonth);
+  const lastMonthRange = jstMonthRange(lastMonth.year, lastMonth.month);
+  const quickRanges = [
+    { label: "今の締め期間", from: thisPeriod.from, to: thisPeriod.to },
+    { label: "前の締め期間", from: lastPeriod.from, to: lastPeriod.to },
+    { label: "今月", from: thisMonthRange.from, to: thisMonthRange.to },
+    { label: "先月", from: lastMonthRange.from, to: lastMonthRange.to },
+  ].map((r) => ({
+    label: r.label,
+    from: toDateInputValue(r.from),
+    to: toDateInputValue(r.to),
+  }));
+
   const linkParams: Record<string, string> = isAllTime
     ? { range: "all", groupBy }
     : { from: effectiveFrom, to: effectiveTo, groupBy };
@@ -120,6 +147,25 @@ export default async function ReportsPage({
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold">検索条件</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-zinc-500">期間をすぐ選ぶ:</span>
+          {quickRanges.map((r) => {
+            const active = !isAllTime && r.from === effectiveFrom && r.to === effectiveTo;
+            return (
+              <Link
+                key={r.label}
+                href={`/admin/reports?${new URLSearchParams({ ...(siteId ? { siteId } : {}), from: r.from, to: r.to, groupBy })}`}
+                className={
+                  active
+                    ? "rounded-full bg-blue-600 px-3 py-1 text-sm font-bold text-white"
+                    : "rounded-full border border-black/10 px-3 py-1 text-sm active:bg-zinc-100 dark:border-white/10 dark:active:bg-zinc-800"
+                }
+              >
+                {r.label}
+              </Link>
+            );
+          })}
+        </div>
         <form className="group flex flex-wrap items-end gap-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
           <label className="flex flex-col gap-1">
             <span className="text-sm text-zinc-500">現場</span>
@@ -198,7 +244,7 @@ export default async function ReportsPage({
         <p className="text-sm text-zinc-500">
           稼働時間合計: {totalHours}h（{entries.length}件の打刻）
         </p>
-        <div className="flex gap-4 pt-2 text-sm">
+        <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2 text-sm">
           <a
             href={`/api/admin/reports/export?${new URLSearchParams({ siteId, from: effectiveFrom, to: effectiveTo, type: "detail" })}`}
             className="text-blue-600 underline"

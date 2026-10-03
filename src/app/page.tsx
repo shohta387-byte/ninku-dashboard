@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentEmployee, getOpenEntriesForSelf, linkSelfAsEmployee } from "@/app/actions";
+import { getCurrentEmployee, getOpenEntriesForSelf, getTodayEntriesForSelf, linkSelfAsEmployee } from "@/app/actions";
 import { getSession } from "@/lib/session";
 import { TopBar } from "@/app/top-bar";
 import { formatJstDate, formatJstTime } from "@/lib/jst-date";
@@ -48,7 +48,14 @@ export default async function Home() {
     redirect("/login?error=no_employee");
   }
 
-  const [employee, openEntries] = await Promise.all([getCurrentEmployee(), getOpenEntriesForSelf()]);
+  const [employee, openEntries, todayEntries] = await Promise.all([
+    getCurrentEmployee(),
+    getOpenEntriesForSelf(),
+    getTodayEntriesForSelf(),
+  ]);
+  // 今まさに勤務中の打刻。あれば現場選択を経由せず、そのまま退勤・現場移動の画面へ進めるようにする。
+  const workingEntry = todayEntries.find((e) => e.clockIn && !e.clockOut) ?? null;
+  const finishedToday = !workingEntry && todayEntries.some((e) => e.clockOut);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
@@ -84,12 +91,37 @@ export default async function Home() {
         </div>
       )}
 
-      <Link
-        href="/sites"
-        className="w-full rounded-lg bg-blue-600 px-5 py-6 text-center text-xl font-bold text-white shadow-sm active:bg-blue-700"
-      >
-        現場を選んで打刻する
-      </Link>
+      {workingEntry ? (
+        <div className="flex flex-col gap-3 rounded-lg border-2 border-green-500 bg-green-50 p-4 dark:border-green-700 dark:bg-green-950">
+          <div>
+            <p className="text-sm font-bold text-green-800 dark:text-green-200">● 勤務中</p>
+            <p className="text-lg font-bold">{siteLabel(workingEntry.site)}</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              出勤 {formatJstTime(workingEntry.clockIn!, { hour: "2-digit", minute: "2-digit" })}〜
+            </p>
+          </div>
+          <Link
+            href={`/clock?siteId=${workingEntry.siteId}`}
+            className="w-full rounded-lg bg-orange-600 px-5 py-5 text-center text-xl font-bold text-white shadow-sm active:bg-orange-700"
+          >
+            退勤・次の現場へ移動
+          </Link>
+        </div>
+      ) : (
+        <>
+          {finishedToday && (
+            <p className="rounded-lg bg-zinc-100 px-4 py-3 text-sm text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+              本日の打刻は退勤まで完了しています。おつかれさまでした。
+            </p>
+          )}
+          <Link
+            href="/sites"
+            className="w-full rounded-lg bg-blue-600 px-5 py-6 text-center text-xl font-bold text-white shadow-sm active:bg-blue-700"
+          >
+            現場を選んで打刻する
+          </Link>
+        </>
+      )}
       <Link
         href="/entries/manual"
         className="w-full rounded-lg border border-black/10 px-5 py-4 text-center text-lg font-bold shadow-sm active:bg-zinc-100 dark:border-white/10 dark:active:bg-zinc-800"
