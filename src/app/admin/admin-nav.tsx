@@ -9,6 +9,9 @@ export function AdminNav() {
       <Link href="/admin/calendar" className="underline">
         カレンダー
       </Link>
+      <Link href="/admin/attendance" className="underline">
+        従業員別勤怠
+      </Link>
       <Link href="/admin/sites" className="underline">
         現場管理
       </Link>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCalendarWeeks } from "./calendar";
+import { buildCalendarWeeks, buildCalendarWeeksForRange } from "./calendar";
 import { jstMidnight, toJstInputValue } from "./jst-date";
 
 describe("buildCalendarWeeks", () => {
@@ -60,5 +60,20 @@ describe("buildCalendarWeeks", () => {
     const lastPaddingDay = weeks[0][5]; // 金曜、7月31日のはず
     expect(lastPaddingDay.inMonth).toBe(false);
     expect(toJstInputValue(lastPaddingDay.date)).toBe("2026-07-31");
+  });
+});
+
+describe("buildCalendarWeeksForRange", () => {
+  it("covers a billing period spanning two months, marking only the period as in range", () => {
+    // 2026/8/21(金)〜2026/9/20(日)
+    const weeks = buildCalendarWeeksForRange(jstMidnight(2026, 8, 21), jstMidnight(2026, 9, 20), jstMidnight(2026, 9, 1));
+    const cells = weeks.flat();
+    expect(cells.length % 7).toBe(0);
+    expect(cells[0].dayOfWeek).toBe(0);
+    const inRange = cells.filter((c) => c.inMonth);
+    expect(inRange).toHaveLength(31);
+    expect(toJstInputValue(inRange[0].date)).toBe("2026-08-21");
+    expect(toJstInputValue(inRange[inRange.length - 1].date)).toBe("2026-09-20");
+    expect(cells.filter((c) => c.isToday).map((c) => toJstInputValue(c.date))).toEqual(["2026-09-01"]);
   });
 });

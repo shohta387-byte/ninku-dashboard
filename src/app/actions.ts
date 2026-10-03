@@ -1581,6 +1581,27 @@ export async function getAllEntriesForDay(dateStr: string) {
   });
 }
 
+// --- 管理者: 従業員別勤怠 ---
+
+// 従業員別勤怠の選択肢。退職者（無効）は過去分を確認できるよう後ろに並べて含める。
+export async function getEmployeesForAttendance() {
+  await requireAdminSession();
+  return prisma.employee.findMany({
+    orderBy: [{ isActive: "desc" }, { isSubcontractor: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, isActive: true, isSubcontractor: true },
+  });
+}
+
+// 1人分の、指定期間（日本時間0時のfrom〜to、両端含む）の打刻。
+export async function getEntriesForEmployeeInRange(employeeId: string, from: Date, to: Date) {
+  await requireAdminSession();
+  return prisma.timeEntry.findMany({
+    where: { employeeId, workDate: { gte: from, lte: to } },
+    include: { site: true },
+    orderBy: { clockIn: "asc" },
+  });
+}
+
 // --- 管理者: BigQuery連携 ---
 
 export interface SyncBigQueryState {

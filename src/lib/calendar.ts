@@ -3,7 +3,7 @@
 // 曜日・日数の計算自体はグレゴリオ暦の暦計算であり、サーバーの実行タイムゾーンに
 // 依存しないため、jst-date.tsのnaiveLocalDateForJstと同様にDateのローカルgetterを使ってよい。
 
-import { jstMidnight, shiftJstMonth } from "./jst-date";
+import { jstMidnight, shiftJstMonth, toJstParts } from "./jst-date";
 
 export interface CalendarDay {
   date: Date; // その日の日本時間0時（workDateと比較できる）
@@ -64,3 +64,31 @@ export function buildCalendarWeeks(year: number, month: number, today: Date): Ca
 }
 
 export const WEEKDAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
+// 任意の期間（締め期間の21日〜翌月20日など、月をまたぐ期間）のカレンダーを、
+// 日曜始まり7列×N週のグリッドとして返す。fromとtoはworkDateと同じ日本時間0時。
+// 期間外の埋め日はinMonth: falseになる。
+export function buildCalendarWeeksForRange(from: Date, to: Date, today: Date): CalendarDay[][] {
+  const start = toJstParts(from);
+  const end = toJstParts(to);
+  const startDate = new Date(start.year, start.month - 1, start.day);
+  const endDate = new Date(end.year, end.month - 1, end.day);
+
+  const cursor = new Date(startDate);
+  cursor.setDate(cursor.getDate() - cursor.getDay());
+  const last = new Date(endDate);
+  last.setDate(last.getDate() + (6 - last.getDay()));
+
+  const cells: CalendarDay[] = [];
+  while (cursor <= last) {
+    const inRange = cursor >= startDate && cursor <= endDate;
+    cells.push(makeCell(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate(), inRange, today));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const weeks: CalendarDay[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    weeks.push(cells.slice(i, i + 7));
+  }
+  return weeks;
+}
