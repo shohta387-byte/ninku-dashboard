@@ -11,16 +11,18 @@ type Contractor = { id: string; name: string };
 // 追加し、そのまま出勤画面へ進む場合などに使う）。渡さない場合は続けて登録できるようリセットする。
 export function AddSiteForm({
   contractors,
+  defaultContractorId = "",
   onCreated,
   preferCurrentLocation = false,
 }: {
   contractors: Contractor[];
+  defaultContractorId?: string;
   onCreated?: (siteId: string) => void;
   preferCurrentLocation?: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(createSite, initialState);
   const [name, setName] = useState("");
-  const [contractorId, setContractorId] = useState("");
+  const [contractorId, setContractorId] = useState(defaultContractorId);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [locationLabel, setLocationLabel] = useState("");
@@ -40,7 +42,7 @@ export function AddSiteForm({
     setHandledState(state);
     if (state.status === "success") {
       setName("");
-      setContractorId("");
+      setContractorId(defaultContractorId);
       setLat(null);
       setLng(null);
       setLocationLabel("");

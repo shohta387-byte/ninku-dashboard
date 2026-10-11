@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getContractorsWithSites, renameContractor, setContractorActive, setSiteContractor } from "@/app/actions";
 import { AddContractorForm } from "./add-contractor-form";
 
@@ -28,6 +29,9 @@ export default async function ContractorsPage() {
           <h3 className="text-base font-bold">
             元請け未設定の現場
             <span className="ml-2 text-sm font-normal text-zinc-500">{unassignedSites.length}現場</span>
+            <Link href="/admin/contractors/unassigned" className="ml-3 text-sm font-bold text-blue-600 underline">
+              現場と人工を見る →
+            </Link>
           </h3>
           <SiteTable sites={unassignedSites} options={options} />
         </section>
@@ -49,6 +53,9 @@ export default async function ContractorsPage() {
               </button>
             </form>
             <span className="text-sm text-zinc-500">{c.sites.length}現場</span>
+            <Link href={`/admin/contractors/${c.id}`} className="text-sm font-bold text-blue-600 underline">
+              現場と人工を見る →
+            </Link>
             {!c.isActive && <span className="rounded bg-zinc-200 px-2 py-0.5 text-xs dark:bg-zinc-700">無効</span>}
             <form action={setContractorActive.bind(null, c.id, !c.isActive)} className="ml-auto">
               <button type="submit" className="text-sm text-blue-600 underline">
@@ -83,7 +90,9 @@ function SiteTable({ sites, options }: { sites: SiteRow[]; options: ContractorOp
           {sites.map((site) => (
             <tr key={site.id} className="border-t border-black/10 dark:border-white/10">
               <td className="px-4 py-2">
-                {site.name}
+                <Link href={`/admin/sites/${site.id}`} className="text-blue-600 underline">
+                  {site.name}
+                </Link>
                 {!site.isActive && <span className="ml-2 text-xs text-zinc-500">（無効）</span>}
               </td>
               <td className="px-4 py-2">

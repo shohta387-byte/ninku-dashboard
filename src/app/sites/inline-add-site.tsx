@@ -9,9 +9,11 @@ type Contractor = { id: string; name: string };
 // 現場登録は<form>なので、呼び出し側の<form>の外に置くこと（formは入れ子にできない）。
 export function InlineAddSite({
   contractors,
+  defaultContractorId,
   onCreated,
 }: {
   contractors: Contractor[];
+  defaultContractorId?: string;
   onCreated: (siteId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -38,6 +40,7 @@ export function InlineAddSite({
       </div>
       <AddSiteForm
         contractors={contractors}
+        defaultContractorId={defaultContractorId}
         preferCurrentLocation
         onCreated={(siteId) => {
           setOpen(false);

@@ -26,7 +26,15 @@ function todayInputValue(): string {
 const TIME_OPTIONS = generateTimeOptions();
 const initialState: CreateEntryForEmployeeState = { status: "idle", message: "" };
 
-export function AdminEntryForm({ employees, sites }: { employees: Employee[]; sites: Site[] }) {
+export function AdminEntryForm({
+  employees,
+  sites,
+  defaultSiteId,
+}: {
+  employees: Employee[];
+  sites: Site[];
+  defaultSiteId?: string;
+}) {
   const [state, formAction, isPending] = useActionState(createEntryForEmployee, initialState);
   const [date, setDate] = useState(todayInputValue());
   const [clockInTime, setClockInTime] = useState("07:30");
@@ -111,6 +119,7 @@ export function AdminEntryForm({ employees, sites }: { employees: Employee[]; si
         <select
           name="siteId"
           required
+          defaultValue={defaultSiteId}
           className="rounded-lg border border-black/20 px-4 py-3 text-lg dark:border-white/20 dark:bg-zinc-900"
         >
           {sites.map((site) => (

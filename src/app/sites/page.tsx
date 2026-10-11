@@ -4,8 +4,9 @@ import { requireEmployeeSession } from "@/lib/session";
 import { TopBar } from "@/app/top-bar";
 import { SitePicker } from "./site-picker";
 
-export default async function SitesPage() {
+export default async function SitesPage({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
   const { isAdmin } = await requireEmployeeSession();
+  const { c } = await searchParams;
   const [employee, sites, contractors] = await Promise.all([
     getCurrentEmployee(),
     getSites(),
@@ -20,7 +21,7 @@ export default async function SitesPage() {
       </Link>
       <h1 className="text-xl font-bold">現場を選んでください</h1>
       {sites.length === 0 && <p className="text-zinc-500">現場が登録されていません。</p>}
-      <SitePicker sites={sites} contractors={contractors} />
+      <SitePicker sites={sites} contractors={contractors} selectedKey={c ?? null} />
     </main>
   );
 }

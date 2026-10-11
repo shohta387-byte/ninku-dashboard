@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { BREAK_WINDOWS, getBreakWindowsWithinSpan, type BreakKey } from "@/lib/ninku";
-import { sumHours, sumNinku, toReportEntry, type ReportEntry } from "@/lib/report";
+import { sumHours, sumNinku, summarizeByEmployee, toReportEntry, type ReportEntry } from "@/lib/report";
 import { siteLabel } from "@/lib/site-label";
 import { geocodeAddress, type GeocodeResult } from "@/lib/geocode";
 import {
@@ -335,6 +335,127 @@ export async function getContractorsWithSites() {
     }),
   ]);
   return { contractors, unassignedSites };
+}
+
+// 退勤済みの打刻を人工計算つきのReportEntryにする（元請け・現場ごとの集計で使う）。
+function completedToReportEntry(e: {
+  id: string;
+  employeeId: string;
+  siteId: string;
+  workDate: Date;
+  clockIn: Date | null;
+  clockOut: Date | null;
+  workedBreak1: boolean;
+  workedBreak2: boolean;
+  workedBreak3: boolean;
+  employee?: { name: string };
+}): ReportEntry {
+  return toReportEntry({
+    id: e.id,
+    employeeId: e.employeeId,
+    employeeName: e.employee?.name ?? "",
+    siteId: e.siteId,
+    siteName: "",
+    workDate: e.workDate,
+    clockIn: e.clockIn!,
+    clockOut: e.clockOut!,
+    workedBreak1: e.workedBreak1,
+    workedBreak2: e.workedBreak2,
+    workedBreak3: e.workedBreak3,
+  });
+}
+
+function inRange(date: Date, from: Date, to: Date): boolean {
+  return date >= from && date <= to;
+}
+
+// 元請けの詳細画面用。その元請けの現場ごとに、今の締め期間・累計の人工を集計する。
+// contractorIdに"unassigned"を渡すと、元請け未設定の現場を対象にする。
+export async function getContractorDetail(contractorId: string) {
+  await requireAdminSession();
+  const isUnassigned = contractorId === "unassigned";
+  const contractor = isUnassigned ? null : await prisma.contractor.findUnique({ where: { id: contractorId } });
+  if (!isUnassigned && !contractor) return null;
+
+  const sites = await prisma.site.findMany({
+    where: { contractorId: isUnassigned ? null : contractorId },
+    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+  });
+  const entries = await prisma.timeEntry.findMany({
+    where: { siteId: { in: sites.map((s) => s.id) }, clockIn: { not: null }, clockOut: { not: null } },
+  });
+  const period = currentBillingPeriod();
+
+  const siteSummaries = sites.map((site) => {
+    const all = entries.filter((e) => e.siteId === site.id).map(completedToReportEntry);
+    const thisPeriod = all.filter((e) => inRange(e.workDate, period.from, period.to));
+    const lastWorkDate = all.reduce<Date | null>((latest, e) => (!latest || e.workDate > latest ? e.workDate : latest), null);
+    return {
+      site,
+      periodNinku: sumNinku(thisPeriod),
+      periodPeople: new Set(thisPeriod.map((e) => e.employeeId)).size,
+      totalNinku: sumNinku(all),
+      lastWorkDate,
+    };
+  });
+
+  return {
+    name: contractor?.name ?? "元請け未設定",
+    isActive: contractor?.isActive ?? true,
+    period,
+    siteSummaries,
+    periodNinku: Math.round(siteSummaries.reduce((sum, s) => sum + s.periodNinku, 0) * 100) / 100,
+    totalNinku: Math.round(siteSummaries.reduce((sum, s) => sum + s.totalNinku, 0) * 100) / 100,
+  };
+}
+
+// 現場の詳細画面用。締め期間（今・前）と累計の人工、今の締め期間の従業員別人工、直近の打刻を返す。
+export async function getSiteDetail(siteId: string) {
+  await requireAdminSession();
+  const site = await prisma.site.findUnique({ where: { id: siteId }, include: { contractor: true } });
+  if (!site) return null;
+
+  const entries = await prisma.timeEntry.findMany({
+    where: { siteId },
+    include: { employee: true },
+    orderBy: [{ workDate: "desc" }, { clockIn: "desc" }],
+  });
+  const completed = entries.filter((e) => e.clockIn && e.clockOut).map(completedToReportEntry);
+  const period = currentBillingPeriod();
+  const lastPeriod = currentBillingPeriod(new Date(period.from.getTime() - 24 * 60 * 60 * 1000));
+  const thisPeriodEntries = completed.filter((e) => inRange(e.workDate, period.from, period.to));
+
+  return {
+    site,
+    period,
+    lastPeriod,
+    periodNinku: sumNinku(thisPeriodEntries),
+    lastPeriodNinku: sumNinku(completed.filter((e) => inRange(e.workDate, lastPeriod.from, lastPeriod.to))),
+    totalNinku: sumNinku(completed),
+    totalDays: new Set(completed.map((e) => e.workDate.getTime())).size,
+    employeeSummaries: summarizeByEmployee(thisPeriodEntries),
+    recentEntries: entries.slice(0, 30),
+  };
+}
+
+// 打刻画面で、その現場での自分の人工（今の締め期間）を表示するために使う。
+export async function getMyNinkuForSite(siteId: string) {
+  const { employeeId } = await requireEmployeeSession();
+  const period = currentBillingPeriod();
+  const entries = await prisma.timeEntry.findMany({
+    where: {
+      employeeId,
+      siteId,
+      clockIn: { not: null },
+      clockOut: { not: null },
+      workDate: { gte: period.from, lte: period.to },
+    },
+  });
+  const reportEntries = entries.map(completedToReportEntry);
+  return {
+    ninku: sumNinku(reportEntries),
+    days: new Set(reportEntries.map((e) => e.workDate.getTime())).size,
+  };
 }
 
 export interface ContractorFormState {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentEmployee, getSiteById, getTodayEntriesForSelf } from "@/app/actions";
+import { getCurrentEmployee, getMyNinkuForSite, getSiteById, getTodayEntriesForSelf } from "@/app/actions";
 import { requireEmployeeSession } from "@/lib/session";
 import { TopBar } from "@/app/top-bar";
 import {
@@ -37,6 +37,8 @@ export default async function ClockPage({
   }
 
   const openEntry = entries.find((e) => !e.clockOut) ?? null;
+  // 勤務中なら勤務中の現場、そうでなければ選んだ現場について、今の締め期間の自分の人工を出す。
+  const myNinku = await getMyNinkuForSite(openEntry ? openEntry.siteId : selectedSite.id);
   const completedEntries = entries.filter((e) => e.clockOut);
 
   // 実際の勤務時間（出勤〜現在時刻）に含まれる休憩枠しかチェックできないようにする。
@@ -54,6 +56,10 @@ export default async function ClockPage({
         <h1 className="text-xl font-bold">
           本日の現場: {siteLabel(openEntry ? openEntry.site : selectedSite)}
         </h1>
+        <p className="text-sm text-zinc-500">
+          この現場でのあなたの人工（今の締め期間）: <span className="font-bold text-zinc-800 dark:text-zinc-200">{myNinku.ninku}</span>
+          （{myNinku.days}日）
+        </p>
       </div>
 
       {!openEntry && <ClockInButton siteId={siteId} />}

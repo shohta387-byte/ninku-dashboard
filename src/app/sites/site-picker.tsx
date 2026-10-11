@@ -22,9 +22,19 @@ function normalize(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, "");
 }
 
-// 現場選択。位置情報が取れたら近い現場を上に出し、その下に元請けごとにまとめた一覧を出す。
-// 検索欄に入力すると、現場名・元請け名のどちらかに一致する現場だけを一覧にする。
-export function SitePicker({ sites, contractors }: { sites: Site[]; contractors: Contractor[] }) {
+// 現場選択。「元請けを選ぶ → その元請けの現場を選ぶ」の2段階で探せるようにする。
+// 位置情報が取れたら近い現場を最初の画面の上に出す。検索欄に入力すると、現場名・元請け名の
+// どちらかに一致する現場を元請けに関係なく一覧にする。選んだ元請けはURL(?c=)で持ち、
+// ブラウザの「戻る」で元請け一覧に戻れるようにする。
+export function SitePicker({
+  sites,
+  contractors,
+  selectedKey,
+}: {
+  sites: Site[];
+  contractors: Contractor[];
+  selectedKey: string | null;
+}) {
   const router = useRouter();
   const [nearby, setNearby] = useState<SiteWithDistance[]>([]);
   const [query, setQuery] = useState("");
@@ -68,6 +78,9 @@ export function SitePicker({ sites, contractors }: { sites: Site[]; contractors:
   if (unassigned.length > 0) {
     groups.push({ key: "unassigned", label: "元請け未設定", sites: unassigned });
   }
+  // 元請けが1つも設定されていない間は、元請けを選ぶ段階を飛ばして現場を直接並べる。
+  const selected = groups.length === 1 ? groups[0] : (groups.find((g) => g.key === selectedKey) ?? null);
+  const preselectedContractorId = selected && selected.key !== "unassigned" ? selected.key : undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -87,33 +100,48 @@ export function SitePicker({ sites, contractors }: { sites: Site[]; contractors:
         </div>
       ) : (
         <>
-          {nearby.length > 0 && (
+          {nearby.length > 0 && (!selected || groups.length === 1) && (
             <div className="flex flex-col gap-2">
               <p className="text-sm font-bold text-zinc-500">近くの現場</p>
               <SiteList sites={nearby} showContractor />
             </div>
           )}
-          <div className="flex flex-col gap-2">
-            {groups.map((g) => (
-              <details
-                key={g.key}
-                open={groups.length === 1}
-                className="rounded-lg border border-black/10 dark:border-white/10"
-              >
-                <summary className="cursor-pointer px-4 py-3 font-bold">
-                  {g.label}
-                  <span className="ml-2 text-sm font-normal text-zinc-500">{g.sites.length}現場</span>
-                </summary>
-                <div className="p-2 pt-0">
-                  <SiteList sites={g.sites} showContractor={false} />
-                </div>
-              </details>
-            ))}
-          </div>
+          {selected ? (
+            <div className="flex flex-col gap-2">
+              {groups.length > 1 && (
+                <Link href="/sites" className="text-sm text-blue-600 underline">
+                  ← 元請けを選び直す
+                </Link>
+              )}
+              <p className="text-lg font-bold">
+                {selected.label}
+                <span className="ml-2 text-sm font-normal text-zinc-500">{selected.sites.length}現場</span>
+              </p>
+              <SiteList sites={selected.sites} showContractor={false} />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-bold text-zinc-500">元請けを選んでください</p>
+              {groups.map((g) => (
+                <Link
+                  key={g.key}
+                  href={`/sites?c=${g.key}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-white px-5 py-4 text-lg font-bold shadow-sm active:bg-zinc-100 dark:border-white/10 dark:bg-zinc-900 dark:active:bg-zinc-800"
+                >
+                  <span>{g.label}</span>
+                  <span className="shrink-0 text-sm font-normal text-zinc-500">{g.sites.length}現場 ›</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </>
       )}
 
-      <InlineAddSite contractors={contractors} onCreated={(siteId) => router.push(`/clock?siteId=${siteId}`)} />
+      <InlineAddSite
+        contractors={contractors}
+        defaultContractorId={preselectedContractorId}
+        onCreated={(siteId) => router.push(`/clock?siteId=${siteId}`)}
+      />
     </div>
   );
 }

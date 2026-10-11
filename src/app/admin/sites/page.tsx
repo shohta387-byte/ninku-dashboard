@@ -28,7 +28,7 @@ function SiteTable({ summaries }: { summaries: SiteSummary[] }) {
           {summaries.map(({ site, totalNinku, totalHours, lastWorkDate }) => (
             <tr key={site.id} className="border-t border-black/10 dark:border-white/10">
               <td className="px-4 py-2">
-                <Link href={`/admin/reports?siteId=${site.id}`} className="text-blue-600 underline">
+                <Link href={`/admin/sites/${site.id}`} className="text-blue-600 underline">
                   {site.name}
                 </Link>
               </td>
